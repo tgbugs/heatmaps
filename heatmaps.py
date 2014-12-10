@@ -91,6 +91,9 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
     if level == 1:
         #print(id_list)
         print('level',level,'parent_id',parent_id,'ids',id_list)
+        xnames = "//relationship[subject/@id='%s' and property/@id='%s']/object"%(parent_id, relationship)
+        print([n.content for n in get_xpath(response.text, xnames)])
+
         return id_list
     else:
         ids = []
@@ -103,15 +106,21 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
 
 def main():
     #tl = ["brain", "cell", "protein", "hippocampus", "ion channel", "calcium"]
-    #tl = ["brain"]  #FIXME for reasons I do not entirely understand 
-    tl = ['Central nervous system']
-    tl = ['midbrain']
-    level = 1  #seems we need to stick with this for now because level = 2 => destroy the server
+    #tl = ['midbrain']
     #relationship = 'part_of'
-    relationship = 'has_proper_part'  #FIXME the results of the query are truncated so we never get to these!
-    child_relationship = 'subject'  # this works for 'Central nervous system' but not for brain :/
-    #child_relationship = None # use this for brain (mine is currently full of wat) this seems backward from wf
+    #relationship='proper_part_of'
 
+    #tl = ['Central nervous system']
+    #relationship = 'has_proper_part'  #FIXME the results of the query are truncated so we never get to these!
+    #child_relationship = 'subject'  # this works for 'Central nervous system' but not for brain :/
+
+
+    #all my wat: there is no tree O_O why!?!?!?!?!
+    tl = ["brain"]  #FIXME for reasons I do not entirely understand 
+    relationship = get_rel_id('has_part')
+    child_relationship = 'subject' # use this for brain (mine is currently full of wat) this seems backward from wf
+
+    level = 1  #seems we need to stick with this for now because level = 2 => destroy the server
 
     #get_rel_id(relationship)
     #return
