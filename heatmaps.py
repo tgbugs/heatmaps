@@ -118,8 +118,26 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
 
 def get_summary_counts(id_):
     query_url = url_serv_summary + id_
-    #response = request.get(query_url)
-    xml = libxml2.parseEntity(query_url)
+    nodes = run_xpath(query_url, '//results/result')
+
+    nifIds = []
+    dbs = []
+    indexables = []
+    counts = []
+
+    for node in nodes:
+        if node.prop(nifId) not in nifIds:
+            nifId = node.prop('nifId')
+            db =  node.prop('db')
+            indexable = node.prop('indexable')
+            nifIds.append()
+            dbs.append()
+            indexables.append()
+            counts.append(node.content)
+
+    return [a for a in zip(nifIds, dbs, indexables, counts)]
+
+
 
     #counts = get_xpath(response.text, term_id_xpath)
 
@@ -145,13 +163,20 @@ def main():
     #get_rel_id(relationship)
     #return
 
-    out = [get_term_id(t) for t in tl]
-    print(out)
-    childs = {}
-    for id_ in out:
-        if id_ != None:
-            childs[id_] = get_child_term_ids(id_, level, relationship, child_relationship)
-    print(childs)
+    term_ids = [get_term_id(t) for t in tl]
+    print(term_ids)
+    #childs = {}
+    datas = {}
+    for term_id in term_ids:
+        if term_id != None:
+            child_ids = get_child_term_ids(term_id, level, relationship, child_relationship)
+            #childs[term_id] = child_ids
+            child_data = {}
+            for child_id in child_ids:
+                data = get_summary_counts(child_id)
+                child_data[fid] = data
+
+    embed()
 
 
 if __name__ == "__main__":
