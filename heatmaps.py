@@ -77,49 +77,40 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
     #the reference count is zero for all children so we can show relative depth
     #esp. important for coverage of species
 
-    rel_id = get_rel_id(relationship)  # we do this up here we don't look it up every time
 
-    def inner(parent_id, level):
-        """ because fuck relationship and being able to dynamically
-            reconfigure on the way down the tree yay namespaces
-        """
+    response = requests.get(url_oq_rel%parent_id)  #FIXME brain returns a truncated result ;_; that is what is breaking things!
 
-        response = requests.get(url_oq_rel%parent_id)  #FIXME brain returns a truncated result ;_; that is what is breaking things!
+    if child_relationship == "subject":
+        xpath = child_term_ids_subject_xpath%(parent_id, relationship)
+    else:
+        xpath = child_term_ids_object_xpath%(parent_id, relationship)
 
-        if child_relationship == "subject":
-            xpath = child_term_ids_subject_xpath%(parent_id, rel_id)
-        else:
-            xpath = child_term_ids_object_xpath%(parent_id, rel_id)
-
-        id_list = get_xpath(response.text, xpath)  # FIXME not clear if this is returning what we want across all levels of the tree
-
-        if level == 1:
-            out = [id_.content for id_ in id_list]
-            #print(out)
-            #embed()
-            return out
-        else:
-            ids = []
-            new_level = level - 1
-            for id_ in id_list:
-                ids += inner(id_, new_level)
-            return ids
-
-    return inner(parent_id, level)
+    id_list = [n.content for n in get_xpath(response.text, xpath)]  # FIXME not clear if this is returning what we want across all levels of the tree
 
 
+    if level == 1:
+        #print(id_list)
+        print('level',level,'parent_id',parent_id,'ids',id_list)
+        return id_list
+    else:
+        ids = []
+        new_level = level - 1
+        for id_ in id_list:
+            ids += get_child_term_ids(id_, new_level, relationship, child_relationship)  #funstuff here with changing the rels
+        print('level',level,'parent_id',parent_id,'ids',ids)
+        return ids
 
 
 def main():
-
-
     #tl = ["brain", "cell", "protein", "hippocampus", "ion channel", "calcium"]
-    tl = ["brain"]
+    #tl = ["brain"]  #FIXME for reasons I do not entirely understand 
+    tl = ['Central nervous system']
+    tl = ['midbrain']
     level = 1  #seems we need to stick with this for now because level = 2 => destroy the server
     #relationship = 'part_of'
     relationship = 'has_proper_part'  #FIXME the results of the query are truncated so we never get to these!
-    child_relationship = 'subject'
-    #child_relationship = None # use this for brain (mine is currently full of wat)
+    child_relationship = 'subject'  # this works for 'Central nervous system' but not for brain :/
+    #child_relationship = None # use this for brain (mine is currently full of wat) this seems backward from wf
 
 
     #get_rel_id(relationship)
