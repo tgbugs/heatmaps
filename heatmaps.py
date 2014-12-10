@@ -14,6 +14,7 @@ args = docopt(__doc__, version='heatmaps .0001')
 url_oq_con_term = "http://nif-services.neuinfo.org/ontoquest/concepts/term/"  #used in get_term_id
 url_oq_gp_term = "http://nif-services.neuinfo.org/ontoquest/getprop/term/"  # used to get the id for relationship
 url_oq_rel = "http://nif-services.neuinfo.org/ontoquest/rel/all/%s?level=1&includeDerived=true&limit=0"  # %s is id
+url_serv_summary = "http://nif-services.neuinfo.org/servicesv1/v1/summary?q="
 
 #xpaths
 term_id_xpath = "//class[not(contains(id,'NEMO'))]/id/text()"
@@ -102,6 +103,11 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
             ids += get_child_term_ids(id_, new_level, relationship, child_relationship)  #funstuff here with changing the rels
         print('level',level,'parent_id',parent_id,'ids',ids)
         return ids
+
+def get_summary_counts(id_):
+    query_url = url_serv_summary + id_
+    response = request.get(query_url)
+    counts = get_xpath(response.text, term_id_xpath)
 
 
 def main():
