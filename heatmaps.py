@@ -35,13 +35,19 @@ def get_xpath(doc, query):
     xpc = node.xpathNewContext()
     return xpc.xpathEval(query)
 
+def run_xpath(url, query):
+    xmlDoc = libxml2.parseEntity(url)
+    xpc = xmlDoc.xpathNewContext()
+    return xpc.xpathEval(query)
+
 def get_rel_id(relationship):  #FIXME this is NOT consistently ordred! AND is_a and part_of behave VERY differently!
     """
         Used to get relationship ids so that xpath queries will actually work :/
     """
     query_url = url_oq_gp_term + relationship
-    response = requests.get(query_url)
-    ids = get_xpath(response.text, rel_id_xpath%relationship)
+    #response = requests.get(query_url)
+    #ids = get_xpath(response.text, rel_id_xpath%relationship)
+    ids = run_xpath(query_url, rel_id_xpath%relationship)
     #embed()
     print([t.content for t in ids])
     try:
@@ -54,8 +60,9 @@ def get_rel_id(relationship):  #FIXME this is NOT consistently ordred! AND is_a 
 def get_term_id(term):
     """ Return the id for a term or None if an error occures """
     query_url = url_oq_con_term + term.replace(" ", "%20")
-    response = requests.get(query_url)
-    ids = get_xpath(response.text, term_id_xpath)
+    #response = requests.get(query_url)
+    #ids = get_xpath(response.text, term_id_xpath)
+    ids = run_xpath(query_url, term_id_xpath)
     try:
         id_ = ids[0].content
     except IndexError:
@@ -79,21 +86,26 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
     #esp. important for coverage of species
 
 
-    response = requests.get(url_oq_rel%parent_id)  #FIXME brain returns a truncated result ;_; that is what is breaking things!
+    #response = requests.get(url_oq_rel%parent_id)  #FIXME brain returns a truncated result ;_; that is what is breaking things!
 
     if child_relationship == "subject":
         xpath = child_term_ids_subject_xpath%(parent_id, relationship)
     else:
         xpath = child_term_ids_object_xpath%(parent_id, relationship)
 
-    id_list = [n.content for n in get_xpath(response.text, xpath)]  # FIXME not clear if this is returning what we want across all levels of the tree
+
+
+    #id_list = [n.content for n in get_xpath(response.text, xpath)]  # FIXME not clear if this is returning what we want across all levels of the tree
+    query_url = url_oq_rel%parent_id
+
+    id_list = [n.content for n in run_xpath(query_url, xpath)]
 
 
     if level == 1:
         #print(id_list)
         print('level',level,'parent_id',parent_id,'ids',id_list)
-        xnames = "//relationship[subject/@id='%s' and property/@id='%s']/object"%(parent_id, relationship)
-        print([n.content for n in get_xpath(response.text, xnames)])
+        #xnames = "//relationship[subject/@id='%s' and property/@id='%s']/object"%(parent_id, relationship)
+        #print([n.content for n in get_xpath(response.text, xnames)])
 
         return id_list
     else:
@@ -106,8 +118,10 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
 
 def get_summary_counts(id_):
     query_url = url_serv_summary + id_
-    response = request.get(query_url)
-    counts = get_xpath(response.text, term_id_xpath)
+    #response = request.get(query_url)
+    xml = libxml2.parseEntity(query_url)
+
+    #counts = get_xpath(response.text, term_id_xpath)
 
 
 def main():
