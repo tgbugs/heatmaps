@@ -13,13 +13,14 @@ from docopt import docopt
 args = docopt(__doc__, version='heatmaps .0001')
 
 
-#NOTES: normalize by the first appearance of the term in the literature to attempt to control for historical entrenchment
+# NOTES: normalize by the first appearance of the term in the literature to attempt to control for historical entrenchment
+# consider also normalizing by the total number of records per datasource??
 
 #urls
 url_oq_con_term = "http://nif-services.neuinfo.org/ontoquest/concepts/term/"  #used in get_term_id
 url_oq_gp_term = "http://nif-services.neuinfo.org/ontoquest/getprop/term/"  # used to get the id for relationship
 url_oq_rel = "http://nif-services.neuinfo.org/ontoquest/rel/all/%s?level=1&includeDerived=true&limit=0"  # %s is id
-url_serv_summary = "http://nif-services.neuinfo.org/servicesv1/v1/summary?q="
+url_serv_summary = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q="
 
 #xpaths
 term_id_xpath = "//class[not(contains(id,'NEMO'))]/id/text()"  #FIXME ok for some reason the non-nemo id gives SHIT results
@@ -152,7 +153,7 @@ def get_summary_counts(id_):
             if len(cs) > 1:
                 print(id_, name, [c.content for c in cs])
                 raise IndexError('too many counts!')
-            count = cs[0].content
+            count = int(cs[0].content)
 
             nifIds.append(nifId)
             dbs.append(db)
@@ -178,7 +179,7 @@ def get_term_count_data(term, level, relationship, child_relationship):
     child_data = {}
     if term_id != None:
         child_ids = get_child_term_ids(term_id, level, relationship, child_relationship)
-        for child_id in child_ids[0:100]:
+        for child_id in child_ids[0:10]:
             data = get_summary_counts(child_id)
             print(data)
             child_data[child_id] = data
@@ -211,189 +212,16 @@ problem_ids = ['birnlex_1700', 'birnlex_1571', 'birnlex_1570','birnlex_1577',
 full_list_of_datasource_nifids = []  # this is useful if we don't know the number of terms and haven't made a matrix, just a set of lists
 map_of_datasource_nifids = {} # better to use a dict to map id -> index  XXX validate uniqueness
 
-def get_source_entity_nifids():  #FIXME, yeah... this needs to be fixed, hopefully with a service and not a direct query to the concept mapper??? also passwords in the clear? really?
-    lol_this_is_silly = [
-                            "nif-0000-00001",
-                            "nif-0000-00004",
-                            "nif-0000-00006",
-                            "nif-0000-00007",
-                            "nif-0000-00016",
-                            "nif-0000-00018",
-                            "nif-0000-00019",
-                            "nif-0000-00022",
-                            "nif-0000-00026",
-                            "nif-0000-00033",
-                            "nif-0000-00048",
-                            "nif-0000-00053",
-                            "nif-0000-00054",
-                            "nif-0000-00057",
-                            "nif-0000-00064",
-                            "nif-0000-00088",
-                            "nif-0000-00093",
-                            "nif-0000-00096",
-                            "nif-0000-00130",
-                            "nif-0000-00134",
-                            "nif-0000-00142",
-                            "nif-0000-00182",
-                            "nif-0000-00202",
-                            "nif-0000-00234",
-                            "nif-0000-00240",
-                            "nif-0000-00241",
-                            "nif-0000-00242",
-                            "nif-0000-00248",
-                            "nif-0000-00255",
-                            "nif-0000-00339",
-                            "nif-0000-00380",
-                            "nif-0000-00386",
-                            "nif-0000-00417",
-                            "nif-0000-00432",
-                            "nif-0000-00437",
-                            "nif-0000-00474",
-                            "nif-0000-00508",
-                            "nif-0000-00517",
-                            "nif-0000-00558",
-                            "nif-0000-01866",
-                            "nif-0000-02550",
-                            "nif-0000-02587",
-                            "nif-0000-02655",
-                            "nif-0000-02683",
-                            "nif-0000-02801",
-                            "nif-0000-02915",
-                            "nif-0000-02955",
-                            "nif-0000-02975",
-                            "nif-0000-03160",
-                            "nif-0000-03179",
-                            "nif-0000-03208",
-                            "nif-0000-03213",
-                            "nif-0000-03215",
-                            "nif-0000-03216",
-                            "nif-0000-03266",
-                            "nif-0000-03531",
-                            "nif-0000-03637",
-                            "nif-0000-04375",
-                            "nif-0000-06666",
-                            "nif-0000-07730",
-                            "nif-0000-07732",
-                            "nif-0000-08127",
-                            "nif-0000-08137",
-                            "nif-0000-08189",
-                            "nif-0000-08190",
-                            "nif-0000-09876",
-                            "nif-0000-10159",
-                            "nif-0000-10193",
-                            "nif-0000-10319",
-                            "nif-0000-10378",
-                            "nif-0000-10407",
-                            "nif-0000-10626",
-                            "nif-0000-10988",
-                            "nif-0000-11872",
-                            "nif-0000-20828",
-                            "nif-0000-20925",
-                            "nif-0000-21091",
-                            "nif-0000-21145",
-                            "nif-0000-21306",
-                            "nif-0000-21427",
-                            "nif-0000-21981",
-                            "nif-0000-22393",
-                            "nif-0000-22791",
-                            "nif-0000-22933",
-                            "nif-0000-23200",
-                            "nif-0000-23302",
-                            "nif-0000-23326",
-                            "nif-0000-24395",
-                            "nif-0000-24396",
-                            "nif-0000-24441",
-                            "nif-0000-24805",
-                            "nif-0000-25587",
-                            "nif-0000-30123",
-                            "nif-0000-33506",
-                            "nif-0000-34000",
-                            "nif-0000-37443",
-                            "nif-0000-37639",
-                            "nif-0000-90175",
-                            "nlx_13182",
-                            "nlx_143565",
-                            "nlx_143622",
-                            "nlx_143714",
-                            "nlx_143786",
-                            "nlx_143912",
-                            "nlx_143941",
-                            "nlx_144048",
-                            "nlx_144143",
-                            "nlx_144428",
-                            "nlx_144460",
-                            "nlx_144461",
-                            "nlx_144480",
-                            "nlx_144509",
-                            "nlx_144511",
-                            "nlx_146253",
-                            "nlx_146273",
-                            "nlx_149225",
-                            "nlx_149360",
-                            "nlx_149407",
-                            "nlx_149462",
-                            "nlx_151342",
-                            "nlx_151644",
-                            "nlx_151660",
-                            "nlx_151671",
-                            "nlx_151674",
-                            "nlx_151737",
-                            "nlx_151833",
-                            "nlx_151835",
-                            "nlx_151885",
-                            "nlx_151903",
-                            "nlx_152524",
-                            "nlx_152525",
-                            "nlx_152590",
-                            "nlx_152633",
-                            "nlx_152636",
-                            "nlx_152660",
-                            "nlx_152700",
-                            "nlx_152726",
-                            "nlx_152862",
-                            "nlx_152871",
-                            "nlx_152872",
-                            "nlx_152892",
-                            "nlx_152893",
-                            "nlx_152901",
-                            "nlx_153873",
-                            "nlx_153897",
-                            "nlx_153944",
-                            "nlx_154697",
-                            "nlx_154720",
-                            "nlx_156710",
-                            "nlx_157710",
-                            "nlx_157720",
-                            "nlx_157874",
-                            "nlx_157982",
-                            "nlx_158103",
-                            "nlx_158106",
-                            "nlx_158287",
-                            "nlx_158294",
-                            "nlx_158375",
-                            "nlx_18447",
-                            "nlx_20701",
-                            "nlx_22354",
-                            "nlx_23971",
-                            "nlx_31015",
-                            "nlx_32805",
-                            "nlx_37081",
-                            "nlx_44256",
-                            "nlx_48903",
-                            "nlx_55906",
-                            "nlx_64373",
-                            "nlx_75188",
-                            "nlx_78616",
-                            "nlx_83091",
-                            "nlx_83784",
-                            "nlx_84521",
-                            "nlx_86401",
-                            "nlx_91615",
-                            "nlx_98194",
-                            "omics_00269",
-    ]
-
-    return lol_this_is_silly
+def get_source_entity_nifids():
+    #TODO  WHERE DO THESE ACTUALLY COME FROM!??!!?!
+    query_url = url_serv_summary + "*"
+    nodes = run_xpath(query_url, '//result/@nifId')  #todo, we may need to also get the name out here :/
+    ids = []
+    for n in nodes:
+        if n.content not in ids:
+            ids.append(n.content)
+    print(ids)
+    return ids
 
 def construct_columns(data_dict, term_id_list, datasource_nifid_list):
     """
@@ -413,15 +241,31 @@ def construct_columns(data_dict, term_id_list, datasource_nifid_list):
         data_list = data_dict[term_id]
         row = np.zeros((n_cols))
         for nifId, _, _, count in data_list:
-            row[nid_map[nifId]] = count
+            if count >= 0:  #ignore errors
+                row[nid_map[nifId]] = count
         rows_to_vstack.append(row)
 
     data_matrix = np.vstack(rows_to_vstack)
     print(data_matrix)
     return data_matrix
 
+def discretize(data_matrix):
+    #bins = [0,0,5 ,10,50,100,1000,10000]
+    #vals = [0,10,20,30,40,50,60,70]
+
+    #for l in bins[:-1]:
+        #for u in bins[1:]:
+            #f_m = (data_matrix > l) * (data_matrix <= u)
+            #data_matrix[f_m]
+
+    data_matrix[data_matrix > 100] = 100
+
+    return data_matrix
+
+
 def display_heatmap(matrix, row_names, col_names):
-    fig, ax = plt.subplots()
+    size = (matrix.shape[1]/max(matrix.shape)*20, matrix.shape[0]/max(matrix.shape)*20)
+    fig, ax = plt.subplots(figsize=size)
 
     ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'))
 
@@ -434,6 +278,7 @@ def display_heatmap(matrix, row_names, col_names):
     ax.yaxis.set_ticklabels(row_names)
     ax.yaxis.set_ticks_position('left')
 
+    [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
 
     fig.show()
     return fig
@@ -473,12 +318,13 @@ def main():
 
     mat = construct_columns(sample_data, sample_ids, sample_source_nifids)
     f1 = display_heatmap(mat, sample_ids, sample_source_nifids)
-    embed()
+    #embed()
     
 
     real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
     rownames = list(real_data.keys())
     mat = construct_columns(real_data, rownames, get_source_entity_nifids())
+    mat = discretize(mat)
     f2 = display_heatmap(mat, rownames, get_source_entity_nifids())
     embed()
 
