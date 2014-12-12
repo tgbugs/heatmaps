@@ -1,13 +1,12 @@
-#!/usr/bin/env python3.4
 """
 Usage:
     heatmaps.py
 """
+from IPython import embed  #FIXME name collisions sadness
 import requests
 import libxml2
 import numpy as np
 import pylab as plt
-from IPython import embed
 from docopt import docopt
 
 args = docopt(__doc__, version='heatmaps .0001')
@@ -323,9 +322,15 @@ def main():
 
     real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
     rownames = list(real_data.keys())
-    mat = construct_columns(real_data, rownames, get_source_entity_nifids())
-    mat = discretize(mat)
-    f2 = display_heatmap(mat, rownames, get_source_entity_nifids())
+    mat2 = construct_columns(real_data, rownames, get_source_entity_nifids())
+    mat2_d = discretize(mat)
+    f2 = display_heatmap(mat2_d, rownames, get_source_entity_nifids())
+
+    species_data = get_term_count_data('eukaryota', 1, 'subClassOf', 'subject')
+    rownames = list(species_data.keys())
+    mat3 = construct_columns(real_data, rownames, get_source_entity_nifids())
+    mat3_d = discretize(mat)  #FIXME in place ;_;
+    f3 = display_heatmap(mat3_d, rownames, get_source_entity_nifids())
     embed()
 
     return 
