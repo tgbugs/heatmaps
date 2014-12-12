@@ -136,6 +136,7 @@ def get_summary_counts(id_):
         if nodes[0] == None:
             return [('error-0',id_,'ERROR', -100)]
     name = run_xpath(query_url, '//clauses/query')[0].content  # FIXME please don't hit this twice ;_;
+    print(name)
 
 
     nifIds = []
@@ -178,7 +179,7 @@ def get_term_count_data(term, level, relationship, child_relationship):
     child_data = {}
     if term_id != None:
         child_ids = get_child_term_ids(term_id, level, relationship, child_relationship)
-        for child_id in child_ids[0:10]:
+        for child_id in child_ids:#[0:10]:
             data = get_summary_counts(child_id)
             print(data)
             child_data[child_id] = data
@@ -314,23 +315,28 @@ def main():
         'termid8',
     ]
 
+    nifids = get_source_entity_nifids()
 
+    """
     mat = construct_columns(sample_data, sample_ids, sample_source_nifids)
     f1 = display_heatmap(mat, sample_ids, sample_source_nifids)
     #embed()
     
 
+    # anamotical regions
     real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
     rownames = list(real_data.keys())
-    mat2 = construct_columns(real_data, rownames, get_source_entity_nifids())
-    mat2_d = discretize(mat)
-    f2 = display_heatmap(mat2_d, rownames, get_source_entity_nifids())
+    mat2 = construct_columns(real_data, rownames, nifids)
+    mat2_d = discretize(mat2)
+    f2 = display_heatmap(mat2_d, rownames, nifids)
+    #"""
 
-    species_data = get_term_count_data('eukaryota', 1, 'subClassOf', 'subject')
-    rownames = list(species_data.keys())
-    mat3 = construct_columns(real_data, rownames, get_source_entity_nifids())
-    mat3_d = discretize(mat)  #FIXME in place ;_;
-    f3 = display_heatmap(mat3_d, rownames, get_source_entity_nifids())
+    #species FIXME need to figure out how to actually traverse the ncbi taxonomy
+    species_data = get_term_count_data('eukaryota', 6, 'subClassOf', 'object')
+    rownames3 = list(species_data.keys())
+    mat3 = construct_columns(species_data, rownames3, nifids)
+    mat3_d = discretize(mat3)  #FIXME in place ;_;
+    f3 = display_heatmap(mat3_d, rownames3, nifids)
     embed()
 
     return 
