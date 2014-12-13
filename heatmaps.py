@@ -28,6 +28,24 @@ rel_id_xpath =  "//class[not(contains(id,'%s'))]/id/text()"  # %s should be rela
 child_term_ids_object_xpath = "//relationship[object/@id='%s' and property/@id='%s']/subject/@id"  # %s id %s relationship
 child_term_ids_subject_xpath = "//relationship[subject/@id='%s' and property/@id='%s']/object/@id"
 
+#files
+file_birnlex_796_rel = "~/Downloads/birnlex_796.xml"
+
+
+def re_tree_der():
+    """
+        A rel/all dump with includeDerived=ture on brain flattens everything, the tree is still there, but we have to
+        recreate it
+
+        JUST KIDDING! not actually possible because they real did flatten it >_<
+    """
+
+    xmlDoc = libxml2.parseEntity(file_birnlex_796_rel)
+    c = xmlDoc.xpathNewContext()
+    child_term_ids_xpath = "//relationship[subject/@id='%s' and property/@id='%s']/subject/@id"%('birnlex_768',)  # %s id %s relationship
+    c.xpathEval(child_term_ids_xpath)
+
+
 class Summary:
     "the summary xml"
 
