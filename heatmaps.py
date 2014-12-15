@@ -59,15 +59,20 @@ def get_xpath(doc, query):
     xpc = node.xpathNewContext()
     return xpc.xpathEval(query)
 
-def run_xpath(url, query):
+def run_xpath(url, *queries):
     #xmlDoc = libxml2.parseEntity(url)  #XXX this causes hangs due to no timeout
     try:
-        resp = requests.get(url, timeout=2)
+        resp = requests.get(url, timeout=8)  # sometimes we need a longer timeout :/
     except requests.exceptions.Timeout:
         return [None]
     xmlDoc = libxml2.parseDoc(resp.text)
     xpc = xmlDoc.xpathNewContext()
-    return xpc.xpathEval(query)
+    out = []
+    for query in queries:
+        out.append(xpc.xpathEval(query))
+    if len(queries) == 1:
+        return out[0]
+    return out
 
 def get_rel_id(relationship):  #FIXME this is NOT consistently ordred! AND is_a and part_of behave VERY differently!
     """
@@ -99,7 +104,7 @@ def get_term_id(term):
         id_ = None
     return id_
 
-def get_child_term_ids(parent_id, level, relationship, child_relationship):
+def get_child_term_ids(parent_id, level, relationship, child_relationship, exclude_parents=False):
     """ This was burried deep within the tree of kepler actors making it nearly
         impossible to find the actual data. Also, who though that using the
         equivalent of environment variables to pass global information down
@@ -120,31 +125,40 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship):
 
     if child_relationship == "subject":
         xpath = child_term_ids_subject_xpath%(parent_id, relationship)
+        xnames = "//relationship[subject/@id='%s' and property/@id='%s']/object"%(parent_id, relationship)
     else:
         xpath = child_term_ids_object_xpath%(parent_id, relationship)
+        xnames = "//relationship[object/@id='%s' and property/@id='%s']/subject"%(parent_id, relationship)
 
 
 
     #id_list = [n.content for n in get_xpath(response.text, xpath)]  # FIXME not clear if this is returning what we want across all levels of the tree
     query_url = url_oq_rel%parent_id
 
-    id_list = [n.content for n in run_xpath(query_url, xpath)]
+    id_nodes, name_nodes = run_xpath(query_url, xpath, xnames)
+    #id_list = [i.content for i in id_nodes]
+    id_name_idct = {id_:n.content for id_, n in zip(id_nodes, name_nodes)}
 
 
     if level == 1:
         #print(id_list)
         print('level',level,'parent_id',parent_id,'ids',id_list)
-        xnames = "//relationship[subject/@id='%s' and property/@id='%s']/object"%(parent_id, relationship)
-        print([n.content for n in run_xpath(query_url, xnames)])  #FIXME MMMM HIT DAT SERVER
+        #print([n.content for n in run_xpath(query_url, xnames)])  #FIXME MMMM HIT DAT SERVER
 
-        return id_list
+        return id_name_dict
+        #return id_list
     else:
-        ids = []
+        child_dicts = []
         new_level = level - 1
-        for id_ in id_list:
-            ids += get_child_term_ids(id_, new_level, relationship, child_relationship)  #funstuff here with changing the rels
-        print('level',level,'parent_id',parent_id,'ids',ids)
-        return ids
+        for id_ in id_name_dict.keys():
+            new_dict = get_child_term_ids(id_, new_level, relationship, child_relationship)  #funstuff here with changing the rels
+            child_dicts.append(new_dict)
+        if exclude_parents:
+            id_name_dict = {}
+        for dict_ in child_dicts:
+            id_name_dict.update(dict_)
+        print('level',level,'parent_id',parent_id,'ids',id_name_dict)
+        return id_name_dict
 
 def get_summary_counts(id_):
     print('getting summary for', id_)
@@ -268,21 +282,25 @@ def construct_columns(data_dict, term_id_list, datasource_nifid_list):
     return data_matrix
 
 def discretize(data_matrix):
-    #bins = [0,0,5 ,10,50,100,1000,10000]
-    #vals = [0,10,20,30,40,50,60,70]
+    bins = [0,1,10,100]
+    vals = [0,1,2,3]
 
     #for l in bins[:-1]:
         #for u in bins[1:]:
             #f_m = (data_matrix > l) * (data_matrix <= u)
             #data_matrix[f_m]
 
-    data_matrix[data_matrix > 100] = 100
+    for lower, upper, val in zip(bins[:-1],bins[1:], vals[:-1]):
+        data_matrix[ (data_matrix >= lower) * (data_matrix < upper) ] = val
+
+    data_matrix[data_matrix >= bins[-1]] = vals[-1]
 
     return data_matrix
 
 
-def display_heatmap(matrix, row_names, col_names):
-    size = (matrix.shape[1]/max(matrix.shape)*20, matrix.shape[0]/max(matrix.shape)*20)
+def display_heatmap(matrix, row_names, col_names, title):
+    #size = (matrix.shape[1]/max(matrix.shape)*20, matrix.shape[0]/max(matrix.shape)*20)
+    size = 10,10
     fig, ax = plt.subplots(figsize=size)
 
     ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'))
@@ -297,6 +315,8 @@ def display_heatmap(matrix, row_names, col_names):
     ax.yaxis.set_ticks_position('left')
 
     [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
+
+    ax.set_title(title)
 
     fig.show()
     return fig
@@ -335,18 +355,24 @@ def main():
 
     nifids = get_source_entity_nifids()
 
-    """
+    #"""
     mat = construct_columns(sample_data, sample_ids, sample_source_nifids)
-    f1 = display_heatmap(mat, sample_ids, sample_source_nifids)
+    f1 = display_heatmap(mat, sample_ids, sample_source_nifids, 'test')
     #embed()
     
 
     # anamotical regions
-    real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
+    #real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
+    real_data = 
+    get_term_count_data('midbrain', 1, 'has_proper_part', 'subject')
+    get_term_count_data('forebrain', 1, 'has_proper_part', 'subject')
+    get_term_count_data('hindbrain', 1, 'has_proper_part', 'subject')
+    real_data.update(
+    # TODO sort on the hierarchy
     rownames = list(real_data.keys())
     mat2 = construct_columns(real_data, rownames, nifids)
     mat2_d = discretize(mat2)
-    f2 = display_heatmap(mat2_d, rownames, nifids)
+    f2 = display_heatmap(mat2_d, rownames, nifids, 'brain partonomy')
     #"""
 
     #species FIXME need to figure out how to actually traverse the ncbi taxonomy
@@ -354,7 +380,7 @@ def main():
     rownames3 = list(species_data.keys())
     mat3 = construct_columns(species_data, rownames3, nifids)
     mat3_d = discretize(mat3)  #FIXME in place ;_;
-    f3 = display_heatmap(mat3_d, rownames3, nifids)
+    f3 = display_heatmap(mat3_d, rownames3, nifids, 'species')
     embed()
 
     return 
