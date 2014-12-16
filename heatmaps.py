@@ -137,12 +137,12 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship, exclu
 
     id_nodes, name_nodes = run_xpath(query_url, xpath, xnames)
     #id_list = [i.content for i in id_nodes]
-    id_name_idct = {id_:n.content for id_, n in zip(id_nodes, name_nodes)}
+    id_name_dict = {id_.content:n.content for id_, n in zip(id_nodes, name_nodes)}
 
 
     if level == 1:
         #print(id_list)
-        print('level',level,'parent_id',parent_id,'ids',id_list)
+        print('level',level,'parent_id',parent_id,'ids',id_name_dict)
         #print([n.content for n in run_xpath(query_url, xnames)])  #FIXME MMMM HIT DAT SERVER
 
         return id_name_dict
@@ -210,12 +210,12 @@ def get_term_count_data(term, level, relationship, child_relationship):
     term_id = get_term_id(term)
     child_data = {}
     if term_id != None:
-        child_ids = get_child_term_ids(term_id, level, relationship, child_relationship)
-        for child_id in child_ids:#[0:10]:
+        id_name_dict = get_child_term_ids(term_id, level, relationship, child_relationship)
+        for child_id in id_name_dict.keys():#[0:10]:
             data = get_summary_counts(child_id)
             print(data)
             child_data[child_id] = data
-    return child_data
+    return child_data, id_name_dict
 
 problem_ids = ['birnlex_1700', 'birnlex_1571', 'birnlex_1570','birnlex_1577',
                'birnlex_1576','birnlex_1575','birnlex_1574','birnlex_1170',
@@ -299,8 +299,9 @@ def discretize(data_matrix):
 
 
 def display_heatmap(matrix, row_names, col_names, title):
-    #size = (matrix.shape[1]/max(matrix.shape)*20, matrix.shape[0]/max(matrix.shape)*20)
-    size = 10,10
+    mm = float(max(matrix.shape)) #python2 a shit
+    size = (matrix.shape[1] / mm * 10 + 1, matrix.shape[0] / mm * 10)
+    print('size',size)
     fig, ax = plt.subplots(figsize=size)
 
     ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'))
@@ -318,7 +319,8 @@ def display_heatmap(matrix, row_names, col_names, title):
 
     ax.set_title(title)
 
-    fig.show()
+    fig.savefig('/tmp/%s.png'%title)
+    #fig.show()
     return fig
 
 
@@ -355,34 +357,39 @@ def main():
 
     nifids = get_source_entity_nifids()
 
-    #"""
     mat = construct_columns(sample_data, sample_ids, sample_source_nifids)
     f1 = display_heatmap(mat, sample_ids, sample_source_nifids, 'test')
-    #embed()
     
+    #"""
 
     # anamotical regions
     #real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
-    real_data = 
-    get_term_count_data('midbrain', 1, 'has_proper_part', 'subject')
-    get_term_count_data('forebrain', 1, 'has_proper_part', 'subject')
-    get_term_count_data('hindbrain', 1, 'has_proper_part', 'subject')
-    real_data.update(
+    brain_data, brain_idn_dict = get_term_count_data('midbrain', 1, 'has_proper_part', 'subject')
+    bd2, bn2 = get_term_count_data('forebrain', 1, 'has_proper_part', 'subject')
+    bd3, bn3 = get_term_count_data('hindbrain', 1, 'has_proper_part', 'subject')
+    brain_data.update(bd2)
+    brain_data.update(bd3)
+    brain_idn_dict.update(bn2)
+    brain_idn_dict.update(bn3)
     # TODO sort on the hierarchy
-    rownames = list(real_data.keys())
-    mat2 = construct_columns(real_data, rownames, nifids)
+    row_ids = list(brain_data.keys())
+    mat2 = construct_columns(brain_data, row_ids, nifids)
     mat2_d = discretize(mat2)
-    f2 = display_heatmap(mat2_d, rownames, nifids, 'brain partonomy')
-    #"""
+    row_names = []
+    for rid in row_ids:
+        name = brain_idn_dict[rid]
+        row_names.append(name)
+    f2 = display_heatmap(mat2_d, row_names, nifids, 'brain partonomy')
 
     #species FIXME need to figure out how to actually traverse the ncbi taxonomy
-    species_data = get_term_count_data('eukaryota', 6, 'subClassOf', 'object')
+    species_data, species_idn_dict = get_term_count_data('eukaryota', 6, 'subClassOf', 'object')
     rownames3 = list(species_data.keys())
     mat3 = construct_columns(species_data, rownames3, nifids)
     mat3_d = discretize(mat3)  #FIXME in place ;_;
     f3 = display_heatmap(mat3_d, rownames3, nifids, 'species')
     embed()
 
+    #"""
     return 
     #tl = ["brain", "cell", "protein", "hippocampus", "ion channel", "calcium"]
     #tl = ['midbrain']
