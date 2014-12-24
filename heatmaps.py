@@ -64,7 +64,7 @@ def run_xpath(url, *queries):
     try:
         resp = requests.get(url, timeout=8)  # sometimes we need a longer timeout :/
     except requests.exceptions.Timeout:
-        return [None]
+        return [None] * len(queries)
     xmlDoc = libxml2.parseDoc(resp.text)
     xpc = xmlDoc.xpathNewContext()
     out = []
@@ -72,6 +72,7 @@ def run_xpath(url, *queries):
         out.append(xpc.xpathEval(query))
     if len(queries) == 1:
         return out[0]
+    print(out)
     return out
 
 def get_rel_id(relationship):  #FIXME this is NOT consistently ordred! AND is_a and part_of behave VERY differently!
@@ -139,7 +140,6 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship, exclu
     #id_list = [i.content for i in id_nodes]
     id_name_dict = {id_.content:n.content for id_, n in zip(id_nodes, name_nodes)}
 
-
     if level == 1:
         #print(id_list)
         print('level',level,'parent_id',parent_id,'ids',id_name_dict)
@@ -163,12 +163,14 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship, exclu
 def get_summary_counts(id_):
     print('getting summary for', id_)
     query_url = url_serv_summary + id_
-    nodes = run_xpath(query_url, '//results/result')
+    #nodes = run_xpath(query_url, '//results/result')
+    nodes, name = run_xpath(query_url, '//results/result', '//clauses/query')
+    name = name[0].content
+    print(name)
     if nodes:
         if nodes[0] == None:
             return [('error-0',id_,'ERROR', -100)]
-    name = run_xpath(query_url, '//clauses/query')[0].content  # FIXME please don't hit this twice ;_;
-    print(name)
+    #name = run_xpath(query_url, '//clauses/query')[0].content  # FIXME please don't hit this twice ;_;
 
 
     nifIds = []
@@ -195,14 +197,14 @@ def get_summary_counts(id_):
             print(node.prop('nifId'))
 
     print(dbs)
-    return [a for a in zip(nifIds, dbs, indexables, counts)]
+    return [a for a in zip(nifIds, dbs, indexables, counts)], name
 
 
 
     #counts = get_xpath(response.text, term_id_xpath)
 
 
-def get_term_count_data(term, level, relationship, child_relationship):
+def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False):
     """
         for a given term go get all its children at a given level and get the
         counts for their instances across databases
@@ -210,9 +212,12 @@ def get_term_count_data(term, level, relationship, child_relationship):
     term_id = get_term_id(term)
     child_data = {}
     if term_id != None:
-        id_name_dict = get_child_term_ids(term_id, level, relationship, child_relationship)
+        if level == 0:  # FIXME surely there is a more rational place to put this?
+            id_name_dict = {term_id:term}
+        else:
+            id_name_dict = get_child_term_ids(term_id, level, relationship, child_relationship, exclude_parents=exclude_parents)  # TODO this is one place we could add the level info??
         for child_id in id_name_dict.keys():#[0:10]:
-            data = get_summary_counts(child_id)
+            data, term_name = get_summary_counts(child_id)
             print(data)
             child_data[child_id] = data
     return child_data, id_name_dict
@@ -299,29 +304,67 @@ def discretize(data_matrix):
 
 
 def display_heatmap(matrix, row_names, col_names, title):
+    blanks = np.zeros_like(matrix[0])
+    matrix = np.vstack((blanks, matrix, blanks))
+    row_names = [''] + row_names + ['']
+    aspect = .3
     mm = float(max(matrix.shape)) #python2 a shit
-    size = (matrix.shape[1] / mm * 10 + 1, matrix.shape[0] / mm * 10)
+    base = 10
+    dpi = 600
+    size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
     print('size',size)
-    fig, ax = plt.subplots(figsize=size)
+    fig, ax = plt.subplots(figsize=size, dpi=dpi)
 
-    ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'))
+    img = ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
 
     #axes
     ax.xaxis.set_ticks([i for i in range(len(col_names))])
     ax.xaxis.set_ticklabels(col_names)
     ax.xaxis.set_ticks_position('top')
+    [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
+    [l.set_fontsize(int(base * .75)) for l in ax.xaxis.get_ticklabels()]
 
     ax.yaxis.set_ticks([i for i in range(len(row_names))])
     ax.yaxis.set_ticklabels(row_names)
     ax.yaxis.set_ticks_position('left')
+    [l.set_fontsize(int(base * .25)) for l in ax.yaxis.get_ticklabels()]
 
-    [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
 
-    ax.set_title(title)
+    fig.suptitle(title, x=.5, y=.01, fontsize=10, verticalalignment='bottom')
+    #embed()
 
-    fig.savefig('/tmp/%s.png'%title)
+    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
     #fig.show()
     return fig
+
+
+def run_levels(term, level, relationship, child_relationship):
+    level_dict = {}
+    while level >= 0:
+        data, idn_dict = get_term_count_data(term, level, relationship, child_relationship, exclude_parents=True)
+        if idn_dict:
+            level_dict[level] = data, idn_dict
+
+        level -= 1
+
+    return level_dict
+
+def disp_levels(level_dict, resource_ids):
+    term = level_dict[0][1].values()[0]   # FIXME mmmm magic numbers
+    for level, (data, idn_dict) in level_dict.items():
+        row_ids = list(data.keys())
+        matrix = construct_columns(data, row_ids, resource_ids)
+        discre = discretize(matrix)
+        row_names = []
+        for rid in row_ids:
+            name = idn_dict[rid]
+            row_names.append(name)
+
+        display_heatmap(discre, row_names, resource_ids, 'level %s'%(level))
+
+
+
+
 
 
 def main():
@@ -358,15 +401,16 @@ def main():
     nifids = get_source_entity_nifids()
 
     mat = construct_columns(sample_data, sample_ids, sample_source_nifids)
-    f1 = display_heatmap(mat, sample_ids, sample_source_nifids, 'test')
+    #f1 = display_heatmap(mat, sample_ids, sample_source_nifids, 'test')
     
-    #"""
+    """
 
     # anamotical regions
     #real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
-    brain_data, brain_idn_dict = get_term_count_data('midbrain', 1, 'has_proper_part', 'subject')
-    bd2, bn2 = get_term_count_data('forebrain', 1, 'has_proper_part', 'subject')
-    bd3, bn3 = get_term_count_data('hindbrain', 1, 'has_proper_part', 'subject')
+    level = 2
+    brain_data, brain_idn_dict = get_term_count_data('midbrain', level, 'has_proper_part', 'subject')
+    bd2, bn2 = get_term_count_data('forebrain', level, 'has_proper_part', 'subject')
+    bd3, bn3 = get_term_count_data('hindbrain', level, 'has_proper_part', 'subject')
     brain_data.update(bd2)
     brain_data.update(bd3)
     brain_idn_dict.update(bn2)
@@ -387,10 +431,17 @@ def main():
     mat3 = construct_columns(species_data, rownames3, nifids)
     mat3_d = discretize(mat3)  #FIXME in place ;_;
     f3 = display_heatmap(mat3_d, rownames3, nifids, 'species')
-    embed()
 
     #"""
-    return 
+    levels = run_levels('midbrain', 4, 'has_proper_part', 'subject')
+    disp_levels(levels, nifids)
+    #embed()
+    return
+
+
+
+def _main():
+    asdf = 0
     #tl = ["brain", "cell", "protein", "hippocampus", "ion channel", "calcium"]
     #tl = ['midbrain']
     #relationship = 'part_of'
@@ -433,6 +484,7 @@ def main():
 
 
     embed()
+
 
 
 
