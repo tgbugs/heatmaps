@@ -72,7 +72,6 @@ def run_xpath(url, *queries):
         out.append(xpc.xpathEval(query))
     if len(queries) == 1:
         return out[0]
-    print(out)
     return out
 
 def get_rel_id(relationship):  #FIXME this is NOT consistently ordred! AND is_a and part_of behave VERY differently!
@@ -151,7 +150,7 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship, exclu
         child_dicts = []
         new_level = level - 1
         for id_ in id_name_dict.keys():
-            new_dict = get_child_term_ids(id_, new_level, relationship, child_relationship)  #funstuff here with changing the rels
+            new_dict = get_child_term_ids(id_, new_level, relationship, child_relationship, exclude_parents)  #funstuff here with changing the rels
             child_dicts.append(new_dict)
         if exclude_parents:
             id_name_dict = {}
@@ -252,13 +251,15 @@ map_of_datasource_nifids = {} # better to use a dict to map id -> index  XXX val
 def get_source_entity_nifids():
     #TODO  WHERE DO THESE ACTUALLY COME FROM!??!!?!
     query_url = url_serv_summary + "*"
-    nodes = run_xpath(query_url, '//result/@nifId')  #todo, we may need to also get the name out here :/
+    id_node, name_node = run_xpath(query_url, '//result/@nifId', '//result/@db')  #todo, we may need to also get the name out here :/
     ids = []
-    for n in nodes:
-        if n.content not in ids:
-            ids.append(n.content)
+    names = []
+    for i, n in zip(id_node, name_node):
+        if i.content not in ids:
+            ids.append(i.content)
+            names.append(n.content)
     print(ids)
-    return ids
+    return ids, names
 
 def construct_columns(data_dict, term_id_list, datasource_nifid_list):
     """
@@ -308,29 +309,33 @@ def display_heatmap(matrix, row_names, col_names, title):
     matrix = np.vstack((blanks, matrix, blanks))
     row_names = [''] + row_names + ['']
     aspect = .3
-    mm = float(max(matrix.shape)) #python2 a shit
-    base = 10
+    #mm = float(max(matrix.shape)) #python2 a shit
+    mm = float(matrix.shape[1]) / float(matrix.shape[0])  # cols / rows
+    print('mm', mm)
+    base = 15  #width
     dpi = 600
-    size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
+    #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
+    size = (base, base / mm * aspect)
     print('size',size)
     fig, ax = plt.subplots(figsize=size, dpi=dpi)
 
-    img = ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
+    img = ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
 
     #axes
     ax.xaxis.set_ticks([i for i in range(len(col_names))])
     ax.xaxis.set_ticklabels(col_names)
     ax.xaxis.set_ticks_position('top')
     [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
-    [l.set_fontsize(int(base * .75)) for l in ax.xaxis.get_ticklabels()]
+    [l.set_fontsize(int(base * .25)) for l in ax.xaxis.get_ticklabels()]
 
     ax.yaxis.set_ticks([i for i in range(len(row_names))])
     ax.yaxis.set_ticklabels(row_names)
     ax.yaxis.set_ticks_position('left')
-    [l.set_fontsize(int(base * .25)) for l in ax.yaxis.get_ticklabels()]
+    [l.set_fontsize(int(base / mm * aspect * .75)) for l in ax.yaxis.get_ticklabels()]
 
+    ax.tick_params(direction='in', length=0, width=0)
 
-    fig.suptitle(title, x=.5, y=.01, fontsize=10, verticalalignment='bottom')
+    fig.suptitle(title, x=.5, y=.01, fontsize=base*.25, verticalalignment='bottom')
     #embed()
 
     fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
@@ -349,7 +354,7 @@ def run_levels(term, level, relationship, child_relationship):
 
     return level_dict
 
-def disp_levels(level_dict, resource_ids):
+def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
     term = level_dict[0][1].values()[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
         row_ids = list(data.keys())
@@ -360,7 +365,7 @@ def disp_levels(level_dict, resource_ids):
             name = idn_dict[rid]
             row_names.append(name)
 
-        display_heatmap(discre, row_names, resource_ids, 'level %s'%(level))
+        display_heatmap(discre, row_names, resource_names, 'level %s'%(level))
 
 
 
@@ -398,7 +403,7 @@ def main():
         'termid8',
     ]
 
-    nifids = get_source_entity_nifids()
+    nifids, nif_names = get_source_entity_nifids()
 
     mat = construct_columns(sample_data, sample_ids, sample_source_nifids)
     #f1 = display_heatmap(mat, sample_ids, sample_source_nifids, 'test')
@@ -433,8 +438,8 @@ def main():
     f3 = display_heatmap(mat3_d, rownames3, nifids, 'species')
 
     #"""
-    levels = run_levels('midbrain', 4, 'has_proper_part', 'subject')
-    disp_levels(levels, nifids)
+    levels = run_levels('midbrain', 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+    disp_levels(levels, nifids, nif_names)
     #embed()
     return
 
