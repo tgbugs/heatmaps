@@ -164,11 +164,15 @@ def get_summary_counts(id_):
     query_url = url_serv_summary + id_
     #nodes = run_xpath(query_url, '//results/result')
     nodes, name = run_xpath(query_url, '//results/result', '//clauses/query')
-    name = name[0].content
-    print(name)
+    if name:
+        name = name[0].content
+        print(name)
     if nodes:
         if nodes[0] == None:
-            return [('error-0',id_,'ERROR', -100)]
+            return [('error-0',id_,'ERROR', -100)], None
+    else:
+        return [('error-1',id_,'ERROR', -100)], None
+
     #name = run_xpath(query_url, '//clauses/query')[0].content  # FIXME please don't hit this twice ;_;
 
 
@@ -310,12 +314,12 @@ def display_heatmap(matrix, row_names, col_names, title):
     row_names = [''] + row_names + ['']
     aspect = .3
     #mm = float(max(matrix.shape)) #python2 a shit
-    mm = float(matrix.shape[1]) / float(matrix.shape[0])  # cols / rows
-    print('mm', mm)
-    base = 15  #width
+    ratio = float(matrix.shape[1]) / float(matrix.shape[0])  # cols / rows
+    print('ratio', ratio)
+    base = 22  #width
     dpi = 600
     #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
-    size = (base, base / mm * aspect)
+    size = (base, base / ratio * aspect)
     print('size',size)
     fig, ax = plt.subplots(figsize=size, dpi=dpi)
 
@@ -331,7 +335,7 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax.yaxis.set_ticks([i for i in range(len(row_names))])
     ax.yaxis.set_ticklabels(row_names)
     ax.yaxis.set_ticks_position('left')
-    [l.set_fontsize(int(base / mm * aspect * .75)) for l in ax.yaxis.get_ticklabels()]
+    [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax.yaxis.get_ticklabels()]
 
     ax.tick_params(direction='in', length=0, width=0)
 
@@ -354,7 +358,7 @@ def run_levels(term, level, relationship, child_relationship):
 
     return level_dict
 
-def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
+def disp_levels(name, level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
     term = level_dict[0][1].values()[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
         row_ids = list(data.keys())
@@ -362,10 +366,10 @@ def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn 
         discre = discretize(matrix)
         row_names = []
         for rid in row_ids:
-            name = idn_dict[rid]
-            row_names.append(name)
+            name_ = idn_dict[rid]
+            row_names.append(name_)
 
-        display_heatmap(discre, row_names, resource_names, 'level %s'%(level))
+        display_heatmap(discre, row_names, resource_names, '%s level %s'%(name, level))
 
 
 
@@ -438,8 +442,15 @@ def main():
     f3 = display_heatmap(mat3_d, rownames3, nifids, 'species')
 
     #"""
+    #brain parts
+    levels = run_levels('hindbrain', 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+    disp_levels('hindbrain',levels, nifids, nif_names)
     levels = run_levels('midbrain', 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
-    disp_levels(levels, nifids, nif_names)
+    disp_levels('midbrain', levels, nifids, nif_names)
+    levels = run_levels('forebrain', 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+    disp_levels('forebrain', levels, nifids, nif_names)
+    
+    #
     #embed()
     return
 
