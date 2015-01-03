@@ -2,6 +2,8 @@
 Usage:
     heatmaps.py
 """
+import pickle
+
 from IPython import embed  #FIXME name collisions sadness
 import requests
 import libxml2
@@ -255,13 +257,16 @@ map_of_datasource_nifids = {} # better to use a dict to map id -> index  XXX val
 def get_source_entity_nifids():
     #TODO  WHERE DO THESE ACTUALLY COME FROM!??!!?!
     query_url = url_serv_summary + "*"
-    id_node, name_node = run_xpath(query_url, '//result/@nifId', '//result/@db')  #todo, we may need to also get the name out here :/
+    id_node, name_node, index = run_xpath(query_url, '//result/@nifId', '//result/@db', '//result/@indexable')  #todo, we may need to also get the name out here :/
     ids = []
     names = []
-    for i, n in zip(id_node, name_node):
+    for i, n, idx in zip(id_node, name_node, index):
         if i.content not in ids:
             ids.append(i.content)
-            names.append(n.content)
+            name = n.content
+            if name == 'Integrated':
+                name = name + ' ' + idx.content
+            names.append(name)
     print(ids)
     return ids, names
 
@@ -307,14 +312,24 @@ def discretize(data_matrix):
 
     return data_matrix
 
+def compute_diversity(matrix):
+    """ our measure of how well something is understood """
+    # FIXME we clearly need to control for how 'generic' the term is, eg 'brain' could easily be the best understood
+    # this is not what we want, the most frequently used across fields is not very useful since it may mean that we
+    # well, no, that is wrong because we DO understand the brain pretty damned well at the level of pointing to it as
+    # an organ, that is a VERY different metric from how well we understand all of its parts (which is another metric)
+    total_data_sources = float(matrix.shape[1])  # yay py2 >_<
+    sources_per_term = np.sum(matrix > 0, axis=1) / total_data_sources
+    print(sources_per_term)
+    return sources_per_term
 
-def display_heatmap(matrix, row_names, col_names, title):
-    blanks = np.zeros_like(matrix[0])
-    matrix = np.vstack((blanks, matrix, blanks))
-    row_names = [''] + row_names + ['']
+def display_heatmap_(matrix, row_names, col_names, title):  # w/o div metric
+    #blanks = np.zeros_like(matrix[0])
+    #matrix = np.vstack((blanks, matrix, blanks))
+    #row_names = [''] + row_names + ['']
     aspect = .3
     #mm = float(max(matrix.shape)) #python2 a shit
-    ratio = float(matrix.shape[1]) / float(matrix.shape[0])  # cols / rows
+    ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
     print('ratio', ratio)
     base = 22  #width
     dpi = 600
@@ -346,6 +361,51 @@ def display_heatmap(matrix, row_names, col_names, title):
     #fig.show()
     return fig
 
+def display_heatmap(matrix, row_names, col_names, title):
+    #blanks = np.zeros_like(matrix[0])
+    #matrix = np.vstack((blanks, matrix, blanks))
+    #row_names = [''] + row_names + ['']
+    aspect = .3
+    #mm = float(max(matrix.shape)) #python2 a shit
+    ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
+    print('ratio', ratio)
+    base = 22  #width
+    dpi = 600
+    #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
+    size = (base, base / ratio * aspect)
+    print('size',size)
+    gskw = {}
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=size, dpi=dpi, gridspec_kw=gskw)
+
+    #axis 1
+    img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
+
+    #axes
+    ax1.xaxis.set_ticks([i for i in range(len(col_names))])
+    ax1.xaxis.set_ticklabels(col_names)
+    ax1.xaxis.set_ticks_position('top')
+    [l.set_rotation(90) for l in ax1.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
+    [l.set_fontsize(int(base * .25)) for l in ax1.xaxis.get_ticklabels()]
+
+    ax1.yaxis.set_ticks([i for i in range(len(row_names))])
+    ax1.yaxis.set_ticklabels(row_names)
+    ax1.yaxis.set_ticks_position('left')
+    [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax1.yaxis.get_ticklabels()]
+
+    ax1.tick_params(direction='in', length=0, width=0)
+
+    #axis 2
+    div = compute_diversity(matrix)
+    other = [i for i in range(len(div))]  # FIXME ICK
+    #ax2.plot(div, other)
+    ax2.bar(other,div,.1, orientation='horizontal')
+
+    fig.suptitle(title, x=.5, y=.01, fontsize=base*.25, verticalalignment='bottom')
+    #embed()
+
+    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
+    #fig.show()
+    return fig
 
 def run_levels(term, level, relationship, child_relationship):
     level_dict = {}
@@ -358,7 +418,7 @@ def run_levels(term, level, relationship, child_relationship):
 
     return level_dict
 
-def disp_levels(name, level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
+def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
     term = level_dict[0][1].values()[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
         row_ids = list(data.keys())
@@ -366,17 +426,80 @@ def disp_levels(name, level_dict, resource_ids, resource_names):  # TODO conside
         discre = discretize(matrix)
         row_names = []
         for rid in row_ids:
-            name_ = idn_dict[rid]
-            row_names.append(name_)
+            name = idn_dict[rid]
+            row_names.append(name)
 
-        display_heatmap(discre, row_names, resource_names, '%s level %s'%(name, level))
-
-
-
+        #out = compute_diversity(matrix)
+        display_heatmap(discre, row_names, resource_names, '%s level %s'%(term, level))
 
 
+def acquire_data(save_loc='/tmp/'):
+    terms = 'hindbrain', 'midbrain', 'forebrain'
+    for term in terms:
+        with f as open(save_loc+term+'.pickle','wb'):
+            levels = run_levels(term, 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+            pickle.dump(levels, f)
+
+def graph_data(load_loc='/tmp/'):
+    nifids, nif_names = get_source_entity_nifids()
+    terms = 'hindbrain', 'midbrain', 'forebrain'
+    for term in terms:
+        with f as open(load_loc+term+'.pickle','rb'):
+            levels = pickle.load(f)
+            disp_levels(levels, nifids, nif_names)
 
 def main():
+    acquire_data()
+    graph_data()
+
+
+def _main():
+    asdf = 0
+    #tl = ["brain", "cell", "protein", "hippocampus", "ion channel", "calcium"]
+    #tl = ['midbrain']
+    #relationship = 'part_of'
+    #relationship='proper_part_of'
+
+    #tl = ['Central nervous system']
+    #relationship = 'has_proper_part'  #FIXME the results of the query are truncated so we never get to these!
+    #child_relationship = 'subject'  # this works for 'Central nervous system' but not for brain :/
+
+
+    #all my wat: there is no tree O_O why!?!?!?!?!
+    tl = ["brain"]  #FIXME for reasons I do not entirely understand 
+    relationship = get_rel_id('has_part')
+    #relationship = 'has_proper_part'  # with the NEMO id :/ all my wat
+    child_relationship = 'subject' # use this for brain (mine is currently full of wat) this seems backward from wf
+
+    level = 1  #seems we need to stick with this for now because level = 2 => destroy the server
+
+    #get_rel_id(relationship)
+    #return
+
+    term_ids = [get_term_id(t) for t in tl]
+    print(term_ids)
+
+    childs = {}
+    datas = {}
+    for term_id in term_ids:
+        if term_id != None:
+            child_ids = get_child_term_ids(term_id, level, relationship, child_relationship)
+            childs[term_id] = child_ids
+            child_data = {}
+            continue
+            for child_id in child_ids[0:100]:
+                if child_id in problem_ids:
+                    continue
+                data = get_summary_counts(child_id)
+                print(data)
+                child_data[child_id] = data
+            datas[term_id] = child_data  # so I heard you like dicts so I put dicts in ur dicts
+
+
+    embed()
+
+
+def main__():
 
     sample_data = {
         'termid1':[],
@@ -443,65 +566,10 @@ def main():
 
     #"""
     #brain parts
-    levels = run_levels('hindbrain', 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
-    disp_levels('hindbrain',levels, nifids, nif_names)
-    levels = run_levels('midbrain', 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
-    disp_levels('midbrain', levels, nifids, nif_names)
-    levels = run_levels('forebrain', 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
-    disp_levels('forebrain', levels, nifids, nif_names)
     
     #
     #embed()
     return
-
-
-
-def _main():
-    asdf = 0
-    #tl = ["brain", "cell", "protein", "hippocampus", "ion channel", "calcium"]
-    #tl = ['midbrain']
-    #relationship = 'part_of'
-    #relationship='proper_part_of'
-
-    #tl = ['Central nervous system']
-    #relationship = 'has_proper_part'  #FIXME the results of the query are truncated so we never get to these!
-    #child_relationship = 'subject'  # this works for 'Central nervous system' but not for brain :/
-
-
-    #all my wat: there is no tree O_O why!?!?!?!?!
-    tl = ["brain"]  #FIXME for reasons I do not entirely understand 
-    relationship = get_rel_id('has_part')
-    #relationship = 'has_proper_part'  # with the NEMO id :/ all my wat
-    child_relationship = 'subject' # use this for brain (mine is currently full of wat) this seems backward from wf
-
-    level = 1  #seems we need to stick with this for now because level = 2 => destroy the server
-
-    #get_rel_id(relationship)
-    #return
-
-    term_ids = [get_term_id(t) for t in tl]
-    print(term_ids)
-
-    childs = {}
-    datas = {}
-    for term_id in term_ids:
-        if term_id != None:
-            child_ids = get_child_term_ids(term_id, level, relationship, child_relationship)
-            childs[term_id] = child_ids
-            child_data = {}
-            continue
-            for child_id in child_ids[0:100]:
-                if child_id in problem_ids:
-                    continue
-                data = get_summary_counts(child_id)
-                print(data)
-                child_data[child_id] = data
-            datas[term_id] = child_data  # so I heard you like dicts so I put dicts in ur dicts
-
-
-    embed()
-
-
 
 
 
