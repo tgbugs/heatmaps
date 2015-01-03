@@ -106,6 +106,12 @@ def get_term_id(term):
         id_ = None
     return id_
 
+def val_term_id(term, reltionship):  # TODO FIXME this is actually a problem with the ontology ;_;
+    """ get term id by validating that this particular term actually has the relationship listed """
+    query_url = url_oq_con_term + term.replace(" ", "%20")
+    response = requests.get(query_url)
+    ids = get_xpath(response.text, term_id_xpath)
+
 def get_child_term_ids(parent_id, level, relationship, child_relationship, exclude_parents=False):
     """ This was burried deep within the tree of kepler actors making it nearly
         impossible to find the actual data. Also, who though that using the
@@ -209,12 +215,13 @@ def get_summary_counts(id_):
     #counts = get_xpath(response.text, term_id_xpath)
 
 
-def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False):
+def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False, term_id=None):
     """
         for a given term go get all its children at a given level and get the
         counts for their instances across databases
     """
-    term_id = get_term_id(term)
+    if not term_id:
+        term_id = get_term_id(term)  # FIXME this fails to work as expected given relationships
     child_data = {}
     if term_id != None:
         if level == 0:  # FIXME surely there is a more rational place to put this?
@@ -258,16 +265,25 @@ def get_source_entity_nifids():
     #TODO  WHERE DO THESE ACTUALLY COME FROM!??!!?!
     query_url = url_serv_summary + "*"
     id_node, name_node, index = run_xpath(query_url, '//result/@nifId', '//result/@db', '//result/@indexable')  #todo, we may need to also get the name out here :/
+    #to_sort =  [i, n, idx for i, n, idx in zip(id_node, name_node, index)]
     ids = []
-    names = []
+    to_sort = []
     for i, n, idx in zip(id_node, name_node, index):
         if i.content not in ids:
             ids.append(i.content)
             name = n.content
             if name == 'Integrated':
                 name = name + ' ' + idx.content
-            names.append(name)
-    print(ids)
+            #names.append(name)
+            to_sort.append((i.content, name))
+    #print(ids)
+    sort_key = lambda tup: tup[1]
+    out = sorted(to_sort, key=sort_key)
+    ids = []
+    names = []
+    for i, n in out:  # FIXME
+        ids.append(i)
+        names.append(n)
     return ids, names
 
 def construct_columns(data_dict, term_id_list, datasource_nifid_list):
@@ -374,8 +390,8 @@ def display_heatmap(matrix, row_names, col_names, title):
     #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
     size = (base, base / ratio * aspect)
     print('size',size)
-    gskw = {}
-    fig, (ax1, ax2) = plt.subplots(1,2,figsize=size, dpi=dpi, gridspec_kw=gskw)
+    gskw = {'width_ratios':[98,2]}
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=size, dpi=dpi, sharey=True, gridspec_kw=gskw)
 
     #axis 1
     img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
@@ -391,14 +407,39 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax1.yaxis.set_ticklabels(row_names)
     ax1.yaxis.set_ticks_position('left')
     [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax1.yaxis.get_ticklabels()]
+    ax1.set_xlim(-4,matrix.shape[1]+4)
 
     ax1.tick_params(direction='in', length=0, width=0)
 
     #axis 2
     div = compute_diversity(matrix)
-    other = [i for i in range(len(div))]  # FIXME ICK
+    #width = 1
+    #other = [i - .5 for i in range(len(div))]  # FIXME ICK
+    ll, ul = ax1.get_ylim()
+    width = (ul - ll) / matrix.shape[0]
+    other = np.arange(ll, ul, width)
+    #other = np.linspace(ul, ll, len(div))  #using imshow makes everything backward :/
+    #try:
+        #width = other[1] - other[0]
+    #except IndexError:
+        #other = ll
+        #width = ul - ll
+                        
     #ax2.plot(div, other)
-    ax2.bar(other,div,.1, orientation='horizontal')
+    print(other, div)
+    #ax2 = plt.subplot(122, sharey=ax1)
+    ax2.barh(other, div, width, edgecolor='None')  #FIXME for some reason horizonal breaks things?
+    #ax2.yaxis.set_ticks([i for i in range(len(row_names))])
+    #ax2.yaxis.set_ticklabels(row_names)
+    #[l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax1.yaxis.get_ticklabels()]
+    ax2.set_xlim(0,1)
+    ax2.tick_params(direction='in', length=0, width=0)
+    ax2.xaxis.set_ticks([0,.5,1])
+    ax2.xaxis.set_ticklabels(['0','.5','1'])
+    [l.set_fontsize(int(base * .25)) for l in ax2.xaxis.get_ticklabels()]
+    #embed()
+    #ax2.set_sharey(ax1)
+    #embed()
 
     fig.suptitle(title, x=.5, y=.01, fontsize=base*.25, verticalalignment='bottom')
     #embed()
@@ -407,10 +448,10 @@ def display_heatmap(matrix, row_names, col_names, title):
     #fig.show()
     return fig
 
-def run_levels(term, level, relationship, child_relationship):
+def run_levels(term, level, relationship, child_relationship, term_id=None):
     level_dict = {}
     while level >= 0:
-        data, idn_dict = get_term_count_data(term, level, relationship, child_relationship, exclude_parents=True)
+        data, idn_dict = get_term_count_data(term, level, relationship, child_relationship, exclude_parents=True, term_id=term_id)
         if idn_dict:
             level_dict[level] = data, idn_dict
 
@@ -435,21 +476,22 @@ def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn 
 
 def acquire_data(save_loc='/tmp/'):
     terms = 'hindbrain', 'midbrain', 'forebrain'
-    for term in terms:
-        with f as open(save_loc+term+'.pickle','wb'):
-            levels = run_levels(term, 5, 'has_proper_part', 'subject')  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+    term_ids = 'birnlex_942', None, None
+    for term, term_id in zip(terms, term_ids):
+        levels = run_levels(term, 5, 'has_proper_part', 'subject', term_id=term_id)  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+        with open(save_loc+term+'.pickle','wb') as f:
             pickle.dump(levels, f)
 
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    terms = 'hindbrain', 'midbrain', 'forebrain'
+    terms = 'hindbrain', #'midbrain', 'forebrain'
     for term in terms:
-        with f as open(load_loc+term+'.pickle','rb'):
+        with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
-            disp_levels(levels, nifids, nif_names)
+        disp_levels(levels, nifids, nif_names)
 
 def main():
-    acquire_data()
+    #acquire_data()
     graph_data()
 
 
