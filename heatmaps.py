@@ -275,7 +275,7 @@ def get_source_entity_nifids():
             if name == 'Integrated':
                 name = name + ' ' + idx.content
             #names.append(name)
-            to_sort.append((i.content, name))
+            to_sort.append((i.content, name + ' ' + i.content))
     #print(ids)
     sort_key = lambda tup: tup[1]
     out = sorted(to_sort, key=sort_key)
@@ -387,10 +387,11 @@ def display_heatmap(matrix, row_names, col_names, title):
     print('ratio', ratio)
     base = 22  #width
     dpi = 600
+    width_ratios = 98, 2
     #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
-    size = (base, base / ratio * aspect)
+    size = (base + sum(width_ratios)/width_ratios[0], base / ratio * aspect)
     print('size',size)
-    gskw = {'width_ratios':[98,2]}
+    gskw = {'width_ratios':width_ratios}
     fig, (ax1, ax2) = plt.subplots(1,2,figsize=size, dpi=dpi, sharey=True, gridspec_kw=gskw)
 
     #axis 1
@@ -407,7 +408,8 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax1.yaxis.set_ticklabels(row_names)
     ax1.yaxis.set_ticks_position('left')
     [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax1.yaxis.get_ticklabels()]
-    ax1.set_xlim(-4,matrix.shape[1]+4)
+    #embed()
+    ax1.set_xlim(-4,matrix.shape[1]*10/3+4)
 
     ax1.tick_params(direction='in', length=0, width=0)
 
