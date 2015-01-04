@@ -354,12 +354,18 @@ def display_heatmap(matrix, row_names, col_names, title):
     #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
     #size = (base + sum(width_ratios)/width_ratios[0], base / ratio * aspect)  #FIXME >_<
     size = (base, base / ratio * aspect)  #FIXME >_<
-    print('size',size)
-    gskw = {'width_ratios':width_ratios}
-    fig, (ax1, ax2) = plt.subplots(1,2,figsize=size, dpi=dpi, sharey=True, gridspec_kw=gskw)  # FIXME for some reason using gridspec breaks imshow and tight_layout a;dslkfja;dslkjf
+    term_fsize = 2
+    #fig, (ax1, ax2) = plt.subplots(1, 2, figsize=size, dpi=dpi, sharey=True, gridspec_kw=gskw)  # FIXME for some reason using gridspec breaks imshow and tight_layout a;dslkfja;dslkjf
+    fig = plt.figure(figsize=size, dpi=dpi)
+    gs = plt.matplotlib.gridspec.GridSpec(1, 2, wspace=0, width_ratios=width_ratios)
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1], sharey=ax1)
+    #embed()
+                      
 
     #axis 1
-    img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
+    img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto')#, aspect=aspect, extent=(0,matrix.shape[1]+1,0,matrix.shape[0]+1))#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
+    #embed()
 
     #axes
     ax1.xaxis.set_ticks([i for i in range(len(col_names))])
@@ -371,8 +377,8 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax1.yaxis.set_ticks([i for i in range(len(row_names))])
     ax1.yaxis.set_ticklabels(row_names)
     ax1.yaxis.set_ticks_position('left')
-    [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax1.yaxis.get_ticklabels()]
-    #embed()
+    #[l.set_fontsize(int(base / ratio * aspect * .75)+1) for l in ax1.yaxis.get_ticklabels()]
+    [l.set_fontsize(term_fsize) for l in ax1.yaxis.get_ticklabels()]
     #ax1.set_xlim(-4,matrix.shape[1]*(10/3)+4)
     #ax1.set_xlim(-10,matrix.shape[1]+10)
 
@@ -384,7 +390,8 @@ def display_heatmap(matrix, row_names, col_names, title):
     #other = [i - .5 for i in range(len(div))]  # FIXME ICK
     ll, ul = ax1.get_ylim()
     width = (ul - ll) / matrix.shape[0]
-    other = np.arange(ll, ul, width)
+    #other = np.arange(ll, ul, width)
+    other = np.arange(ll, ul, width)[::-1]  # for whatever reason backwards, probably imshow idiocy
     #other = np.linspace(ul, ll, len(div))  #using imshow makes everything backward :/
     #try:
         #width = other[1] - other[0]
@@ -398,17 +405,21 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax2.barh(other, div, width, edgecolor='None')  #FIXME for some reason horizonal breaks things?
     #ax2.yaxis.set_ticks([i for i in range(len(row_names))])
     #ax2.yaxis.set_ticklabels(row_names)
-    #[l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax1.yaxis.get_ticklabels()]
+    ax2.yaxis.set_ticks_position('right')
+    #[l.set_fontsize(int(base / ratio * aspect * .75)+1) for l in ax2.yaxis.get_ticklabels()]
+    [l.set_fontsize(term_fsize) for l in ax2.yaxis.get_ticklabels()]
     ax2.set_xlim(0,1)
     ax2.tick_params(direction='in', length=0, width=0)
     ax2.xaxis.set_ticks([0,.5,1])
     ax2.xaxis.set_ticklabels(['0','.5','1'])
     [l.set_fontsize(int(base * .25)) for l in ax2.xaxis.get_ticklabels()]
+    #ax2.xaxis.set_label('Div score.')  # XXX
     #embed()
     #ax2.set_sharey(ax1)
     #embed()
 
-    fig.suptitle(title, x=.5, y=.01, fontsize=base*.25, verticalalignment='bottom')
+    fig.suptitle(title, x=.5, y=0, fontsize=base*.25, verticalalignment='bottom')  # FIXME stupidly broken >_<
+    #ax1.xaxis.set_label(title) #XXX
     #embed()
 
     fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
@@ -450,7 +461,7 @@ def acquire_data(save_loc='/tmp/'):
 
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    terms = 'hindbrain', #'midbrain', 'forebrain'
+    terms = 'hindbrain', 'midbrain', 'forebrain'
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
