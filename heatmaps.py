@@ -339,44 +339,6 @@ def compute_diversity(matrix):
     print(sources_per_term)
     return sources_per_term
 
-def display_heatmap_(matrix, row_names, col_names, title):  # w/o div metric
-    #blanks = np.zeros_like(matrix[0])
-    #matrix = np.vstack((blanks, matrix, blanks))
-    #row_names = [''] + row_names + ['']
-    aspect = .3
-    #mm = float(max(matrix.shape)) #python2 a shit
-    ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
-    print('ratio', ratio)
-    base = 22  #width
-    dpi = 600
-    #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
-    size = (base, base / ratio * aspect)
-    print('size',size)
-    fig, ax = plt.subplots(figsize=size, dpi=dpi)
-
-    img = ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
-
-    #axes
-    ax.xaxis.set_ticks([i for i in range(len(col_names))])
-    ax.xaxis.set_ticklabels(col_names)
-    ax.xaxis.set_ticks_position('top')
-    [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
-    [l.set_fontsize(int(base * .25)) for l in ax.xaxis.get_ticklabels()]
-
-    ax.yaxis.set_ticks([i for i in range(len(row_names))])
-    ax.yaxis.set_ticklabels(row_names)
-    ax.yaxis.set_ticks_position('left')
-    [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax.yaxis.get_ticklabels()]
-
-    ax.tick_params(direction='in', length=0, width=0)
-
-    fig.suptitle(title, x=.5, y=.01, fontsize=base*.25, verticalalignment='bottom')
-    #embed()
-
-    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
-    #fig.show()
-    return fig
-
 def display_heatmap(matrix, row_names, col_names, title):
     #blanks = np.zeros_like(matrix[0])
     #matrix = np.vstack((blanks, matrix, blanks))
@@ -388,11 +350,13 @@ def display_heatmap(matrix, row_names, col_names, title):
     base = 22  #width
     dpi = 600
     width_ratios = 98, 2
+    #width_ratios = 100, 0
     #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
-    size = (base + sum(width_ratios)/width_ratios[0], base / ratio * aspect)
+    #size = (base + sum(width_ratios)/width_ratios[0], base / ratio * aspect)  #FIXME >_<
+    size = (base, base / ratio * aspect)  #FIXME >_<
     print('size',size)
     gskw = {'width_ratios':width_ratios}
-    fig, (ax1, ax2) = plt.subplots(1,2,figsize=size, dpi=dpi, sharey=True, gridspec_kw=gskw)
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=size, dpi=dpi, sharey=True, gridspec_kw=gskw)  # FIXME for some reason using gridspec breaks imshow and tight_layout a;dslkfja;dslkjf
 
     #axis 1
     img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
@@ -409,7 +373,8 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax1.yaxis.set_ticks_position('left')
     [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax1.yaxis.get_ticklabels()]
     #embed()
-    ax1.set_xlim(-4,matrix.shape[1]*10/3+4)
+    #ax1.set_xlim(-4,matrix.shape[1]*(10/3)+4)
+    #ax1.set_xlim(-10,matrix.shape[1]+10)
 
     ax1.tick_params(direction='in', length=0, width=0)
 
@@ -462,7 +427,7 @@ def run_levels(term, level, relationship, child_relationship, term_id=None):
     return level_dict
 
 def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
-    term = level_dict[0][1].values()[0]   # FIXME mmmm magic numbers
+    term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
         row_ids = list(data.keys())
         matrix = construct_columns(data, row_ids, resource_ids)
@@ -474,7 +439,6 @@ def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn 
 
         #out = compute_diversity(matrix)
         display_heatmap(discre, row_names, resource_names, '%s level %s'%(term, level))
-
 
 def acquire_data(save_loc='/tmp/'):
     terms = 'hindbrain', 'midbrain', 'forebrain'
@@ -494,6 +458,7 @@ def graph_data(load_loc='/tmp/'):
 
 def main():
     #acquire_data()
+    #embed()
     graph_data()
 
 
@@ -615,8 +580,43 @@ def main__():
     #embed()
     return
 
+def display_heatmap_(matrix, row_names, col_names, title):  # w/o div metric
+    #blanks = np.zeros_like(matrix[0])
+    #matrix = np.vstack((blanks, matrix, blanks))
+    #row_names = [''] + row_names + ['']
+    aspect = .3
+    #mm = float(max(matrix.shape)) #python2 a shit
+    ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
+    print('ratio', ratio)
+    base = 22  #width
+    dpi = 600
+    #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
+    size = (base, base / ratio * aspect)
+    print('size',size)
+    fig, ax = plt.subplots(figsize=size, dpi=dpi)
 
+    img = ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
 
+    #axes
+    ax.xaxis.set_ticks([i for i in range(len(col_names))])
+    ax.xaxis.set_ticklabels(col_names)
+    ax.xaxis.set_ticks_position('top')
+    [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
+    [l.set_fontsize(int(base * .25)) for l in ax.xaxis.get_ticklabels()]
+
+    ax.yaxis.set_ticks([i for i in range(len(row_names))])
+    ax.yaxis.set_ticklabels(row_names)
+    ax.yaxis.set_ticks_position('left')
+    [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax.yaxis.get_ticklabels()]
+
+    ax.tick_params(direction='in', length=0, width=0)
+
+    fig.suptitle(title, x=.5, y=.01, fontsize=base*.25, verticalalignment='bottom')
+    #embed()
+
+    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
+    #fig.show()
+    return fig
 
 
 if __name__ == "__main__":
