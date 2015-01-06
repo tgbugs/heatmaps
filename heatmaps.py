@@ -3,6 +3,7 @@ Usage:
     heatmaps.py
 """
 import pickle
+from collections import defaultdict
 
 from IPython import embed  #FIXME name collisions sadness
 import requests
@@ -61,10 +62,10 @@ def get_xpath(doc, query):
     xpc = node.xpathNewContext()
     return xpc.xpathEval(query)
 
-def run_xpath(url, *queries, timeout=8):
+def run_xpath(url, *queries):
     #xmlDoc = libxml2.parseEntity(url)  #XXX this causes hangs due to no timeout
     try:
-        resp = requests.get(url, timeout=timeout)  # sometimes we need a longer timeout :/
+        resp = requests.get(url, timeout=999)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
     except requests.exceptions.Timeout:
         return [None] * len(queries)
     xmlDoc = libxml2.parseDoc(resp.text)
@@ -98,7 +99,6 @@ def get_term_id(term):
     query_url = url_oq_con_term + term.replace(" ", "%20")
     response = requests.get(query_url)
     ids = get_xpath(response.text, term_id_xpath)
-    #embed()
     #ids = run_xpath(query_url, term_id_xpath)
     try:
         id_ = ids[0].content
@@ -167,20 +167,18 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship, exclu
         print('level',level,'parent_id',parent_id,'ids',id_name_dict)
         return id_name_dict
 
-def get_summary_counts(id_, timeout=8):
+def get_summary_counts(id_):
     print('getting summary for', id_)
     query_url = url_serv_summary + id_
     #nodes = run_xpath(query_url, '//results/result')
-    nodes, name = run_xpath(query_url, '//results/result', '//clauses/query', timeout=timeout)
+    nodes, name = run_xpath(query_url, '//results/result', '//clauses/query')
     if name:
         name = name[0].content
         print(name)
     if nodes:
         if nodes[0] == None:
-            #embed()
             return [('error-0',id_,'ERROR', -100)], None
     else:
-        #embed()
         return [('error-1',id_,'ERROR', -100)], None
 
     #name = run_xpath(query_url, '//clauses/query')[0].content  # FIXME please don't hit this twice ;_;
@@ -217,7 +215,7 @@ def get_summary_counts(id_, timeout=8):
     #counts = get_xpath(response.text, term_id_xpath)
 
 
-def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False, term_id=None, timeout=8):
+def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False, term_id=None):
     """
         for a given term go get all its children at a given level and get the
         counts for their instances across databases
@@ -234,7 +232,7 @@ def get_term_count_data(term, level, relationship, child_relationship, exclude_p
         else:
             id_name_dict = get_child_term_ids(term_id, level, relationship, child_relationship, exclude_parents=exclude_parents)  # TODO this is one place we could add the level info??
         for child_id in id_name_dict.keys():#[0:10]:
-            data, term_name = get_summary_counts(child_id, timeout)
+            data, term_name = get_summary_counts(child_id)
             print(data)
             child_data[child_id] = data
     return child_data, id_name_dict
@@ -280,7 +278,8 @@ def get_source_entity_nifids():
             if name == 'Integrated':
                 name = name + ' ' + idx.content
             #names.append(name)
-            to_sort.append((i.content, name + ' ' + i.content))
+            #to_sort.append((i.content, name + ' ' + i.content))
+            to_sort.append((i.content, name))
     #print(ids)
     sort_key = lambda tup: tup[1]
     out = sorted(to_sort, key=sort_key)
@@ -290,6 +289,24 @@ def get_source_entity_nifids():
         ids.append(i)
         names.append(n)
     return ids, names
+
+def make_collapse_map(ids, names):
+    """ use the data on source entities and collapse redundant entries """
+
+    collapse = defaultdict(list)
+
+    for id_,name in zip(ids,names):
+        collapse[name].append(id_)
+
+    unames = list(collapse.keys())
+    unames.sort()
+    ids_list = []
+    for n in unames:
+        ids_list.append(tuple(collapse[n]))
+
+    return ids_list, unames
+
+    
 
 def construct_columns(data_dict, term_id_list, datasource_nifid_list, collapse_map=None):
     """
@@ -317,13 +334,12 @@ def construct_columns(data_dict, term_id_list, datasource_nifid_list, collapse_m
     print(data_matrix)
     # a collapse map should be a list of tuples of nifids from the same source
     # it MUST also have an acompanying name mapping (used to generate the list)
-    embed()
     if collapse_map:  # if we dont want the full split on source id
+        new_rows_to_vstack = []
         for id_tup in collapse_map:
-            indexes = []
-            for id_ in id_tup:
-                indexes.append(nid_map[id_])
-
+            col_tup = [nid_map[id_] for id_ in id_tup]  #get the cols for that id
+            new_rows_to_vstack = np.sum(data_matrix[:,col_tup], axis=1)
+        data_matrix = np.vstack(new_rows_to_vstack)
         
     return data_matrix
 
@@ -375,12 +391,10 @@ def display_heatmap(matrix, row_names, col_names, title):
     gs = plt.matplotlib.gridspec.GridSpec(1, 2, wspace=0, width_ratios=width_ratios)
     ax1 = fig.add_subplot(gs[0])
     ax2 = fig.add_subplot(gs[1], sharey=ax1)
-    #embed()
                       
 
     #axis 1
     img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto')#, aspect=aspect, extent=(0,matrix.shape[1]+1,0,matrix.shape[0]+1))#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
-    #embed()
 
     #axes
     ax1.xaxis.set_ticks([i for i in range(len(col_names))])
@@ -429,13 +443,10 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax2.xaxis.set_ticklabels(['0','.5','1'])
     [l.set_fontsize(int(base * .25)) for l in ax2.xaxis.get_ticklabels()]
     #ax2.xaxis.set_label('Div score.')  # XXX
-    #embed()
     #ax2.set_sharey(ax1)
-    #embed()
 
     fig.suptitle(title, x=.5, y=0, fontsize=base*.25, verticalalignment='bottom')  # FIXME stupidly broken >_<
     #ax1.xaxis.set_label(title) #XXX
-    #embed()
 
     fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
     #fig.show()
@@ -456,7 +467,8 @@ def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn 
     term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
         row_ids = list(data.keys())
-        matrix = construct_columns(data, row_ids, resource_ids)
+        collapse_map, unames = make_collapse_map(resource_ids, resource_names)
+        matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
         discre = discretize(matrix)
         row_names = []
         for rid in row_ids:
@@ -464,7 +476,8 @@ def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn 
             row_names.append(name)
 
         #out = compute_diversity(matrix)
-        display_heatmap(discre, row_names, resource_names, '%s level %s'%(term, level))
+        #display_heatmap(discre, row_names, resource_names, '%s level %s'%(term, level))
+        display_heatmap(discre, row_names, unames, '%s level %s'%(term, level))
 
 def acquire_data(save_loc='/tmp/'):
     terms = 'hindbrain', 'midbrain', 'forebrain'
@@ -502,7 +515,7 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
     idns = {}
     for term in terms:
         print(term)
-        data, idn_dict = get_term_count_data(term, 0, 'subClassOf', 'subject', exclude_parents=True, timeout=999)  # FIXME if level == 0 IGNORE ALL THE THINGS
+        data, idn_dict = get_term_count_data(term, 0, 'subClassOf', 'subject', exclude_parents=True)  # FIXME if level == 0 IGNORE ALL THE THINGS
         datas.update(data)
         idns.update(idn_dict)
 
@@ -517,9 +530,9 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
 
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    #terms = 'hindbrain', 'midbrain', 'forebrain'
+    terms = 'hindbrain', #'midbrain', 'forebrain'
     #terms = 'neurotransmitter', 
-    terms = 'drug of abuse',
+    #terms = 'drug of abuse',
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
@@ -529,9 +542,8 @@ def main():
     #acquire_data()
     #out = acquire_nt_data()
     #out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
-    out= acquire_doa_data()
-    embed()
-
+    #out= acquire_doa_data()
+    #embed()
 
     graph_data()
 
