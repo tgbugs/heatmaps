@@ -484,7 +484,7 @@ def acquire_data(save_loc='/tmp/'):
     terms = 'hindbrain', 'midbrain', 'forebrain'
     term_ids = 'birnlex_942', None, None
     for term, term_id in zip(terms, term_ids):
-        levels = run_levels(term, 5, 'has_proper_part', 'subject', term_id=term_id)  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+        levels = run_levels(term, 7, 'has_proper_part', 'subject', term_id=term_id)  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
         with open(save_loc+term+'.pickle','wb') as f:
             pickle.dump(levels, f)
 
@@ -510,7 +510,7 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
     """ given a list of terms return the counts for each """
     with open(term_file) as f:
         lines = f.readlines()
-    terms = [line.rstrip('\n') for line in lines]
+    terms = [line.rstrip('\n').rstrip('\r') for line in lines]
 
     datas = {}
     idns = {}
@@ -531,9 +531,10 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
 
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse'
+    #terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse'
     #terms = 'neurotransmitter', 
     #terms = 'drug of abuse',
+    terms = 'species',
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
@@ -542,9 +543,11 @@ def graph_data(load_loc='/tmp/'):
 def main():
     #acquire_data()
     #out = acquire_nt_data()
-    out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
-    out= acquire_doa_data()
+    #out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
+    #out= acquire_doa_data()
     #embed()
+
+    out = get_term_file_counts('/tmp/blast_names','species')  #TODO clean up names
 
     graph_data()
 
