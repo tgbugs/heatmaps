@@ -61,10 +61,10 @@ def get_xpath(doc, query):
     xpc = node.xpathNewContext()
     return xpc.xpathEval(query)
 
-def run_xpath(url, *queries):
+def run_xpath(url, *queries, timeout=8):
     #xmlDoc = libxml2.parseEntity(url)  #XXX this causes hangs due to no timeout
     try:
-        resp = requests.get(url, timeout=8)  # sometimes we need a longer timeout :/
+        resp = requests.get(url, timeout=timeout)  # sometimes we need a longer timeout :/
     except requests.exceptions.Timeout:
         return [None] * len(queries)
     xmlDoc = libxml2.parseDoc(resp.text)
@@ -167,18 +167,20 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship, exclu
         print('level',level,'parent_id',parent_id,'ids',id_name_dict)
         return id_name_dict
 
-def get_summary_counts(id_):
+def get_summary_counts(id_, timeout=8):
     print('getting summary for', id_)
     query_url = url_serv_summary + id_
     #nodes = run_xpath(query_url, '//results/result')
-    nodes, name = run_xpath(query_url, '//results/result', '//clauses/query')
+    nodes, name = run_xpath(query_url, '//results/result', '//clauses/query', timeout=timeout)
     if name:
         name = name[0].content
         print(name)
     if nodes:
         if nodes[0] == None:
+            #embed()
             return [('error-0',id_,'ERROR', -100)], None
     else:
+        #embed()
         return [('error-1',id_,'ERROR', -100)], None
 
     #name = run_xpath(query_url, '//clauses/query')[0].content  # FIXME please don't hit this twice ;_;
@@ -215,7 +217,7 @@ def get_summary_counts(id_):
     #counts = get_xpath(response.text, term_id_xpath)
 
 
-def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False, term_id=None):
+def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False, term_id=None, timeout=8):
     """
         for a given term go get all its children at a given level and get the
         counts for their instances across databases
@@ -223,13 +225,16 @@ def get_term_count_data(term, level, relationship, child_relationship, exclude_p
     if not term_id:
         term_id = get_term_id(term)  # FIXME this fails to work as expected given relationships
     child_data = {}
-    if term_id != None:
+    if term_id == None:
+        print('ERROR:',term,'could not find an id!')
+        return {}, {}
+    else:
         if level == 0:  # FIXME surely there is a more rational place to put this?
             id_name_dict = {term_id:term}
         else:
             id_name_dict = get_child_term_ids(term_id, level, relationship, child_relationship, exclude_parents=exclude_parents)  # TODO this is one place we could add the level info??
         for child_id in id_name_dict.keys():#[0:10]:
-            data, term_name = get_summary_counts(child_id)
+            data, term_name = get_summary_counts(child_id, timeout)
             print(data)
             child_data[child_id] = data
     return child_data, id_name_dict
@@ -459,9 +464,52 @@ def acquire_data(save_loc='/tmp/'):
         with open(save_loc+term+'.pickle','wb') as f:
             pickle.dump(levels, f)
 
+def acquire_nt_data(save_loc='/tmp/'):
+    terms = 'neurotransmitter',
+    term_ids = None, 
+    for term, term_id in zip(terms, term_ids):
+        levels = run_levels(term, 0, 'subClassOf', 'object', term_id=term_id)  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+        with open(save_loc+term+'.pickle','wb') as f:
+            pickle.dump(levels, f)
+    return levels
+
+def acquire_doa_data(save_loc='/tmp/'):
+    terms = 'drug of abuse',
+    term_ids = None, 
+    for term, term_id in zip(terms, term_ids):
+        levels = run_levels(term, 2, 'subClassOf', 'object', term_id=term_id)  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+        with open(save_loc+term+'.pickle','wb') as f:
+            pickle.dump(levels, f)
+    return levels
+
+def get_term_file_counts(term_file, name, save_loc='/tmp/'):
+    """ given a list of terms return the counts for each """
+    with open(term_file) as f:
+        lines = f.readlines()
+    terms = [line.rstrip('\n') for line in lines]
+
+    datas = {}
+    idns = {}
+    for term in terms:
+        print(term)
+        data, idn_dict = get_term_count_data(term, 0, 'subClassOf', 'subject', exclude_parents=True, timeout=999)  # FIXME if level == 0 IGNORE ALL THE THINGS
+        datas.update(data)
+        idns.update(idn_dict)
+
+    level_dict = {0:(datas, idns)}
+
+
+    with open(save_loc+name+'.pickle','wb') as f:
+        pickle.dump(level_dict, f)
+
+    return level_dict
+
+
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    terms = 'hindbrain', 'midbrain', 'forebrain'
+    #terms = 'hindbrain', 'midbrain', 'forebrain'
+    #terms = 'neurotransmitter', 
+    terms = 'drug of abuse',
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
@@ -469,7 +517,12 @@ def graph_data(load_loc='/tmp/'):
 
 def main():
     #acquire_data()
-    #embed()
+    #out = acquire_nt_data()
+    #out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
+    out= acquire_doa_data()
+    embed()
+
+
     graph_data()
 
 
