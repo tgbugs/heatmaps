@@ -291,7 +291,7 @@ def get_source_entity_nifids():
         names.append(n)
     return ids, names
 
-def construct_columns(data_dict, term_id_list, datasource_nifid_list):
+def construct_columns(data_dict, term_id_list, datasource_nifid_list, collapse_map=None):
     """
         Given two lists of ids, the first list will be rows the 2nd will be comluns
         The values first list should match the keys in the data dict
@@ -315,6 +315,16 @@ def construct_columns(data_dict, term_id_list, datasource_nifid_list):
 
     data_matrix = np.vstack(rows_to_vstack)
     print(data_matrix)
+    # a collapse map should be a list of tuples of nifids from the same source
+    # it MUST also have an acompanying name mapping (used to generate the list)
+    embed()
+    if collapse_map:  # if we dont want the full split on source id
+        for id_tup in collapse_map:
+            indexes = []
+            for id_ in id_tup:
+                indexes.append(nid_map[id_])
+
+        
     return data_matrix
 
 def discretize(data_matrix):
