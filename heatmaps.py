@@ -295,7 +295,7 @@ def make_collapse_map(ids, names):
 
     collapse = defaultdict(list)
 
-    for id_,name in zip(ids,names):
+    for id_, name in zip(ids, names):
         collapse[name].append(id_)
 
     unames = list(collapse.keys())
@@ -335,12 +335,12 @@ def construct_columns(data_dict, term_id_list, datasource_nifid_list, collapse_m
     # a collapse map should be a list of tuples of nifids from the same source
     # it MUST also have an acompanying name mapping (used to generate the list)
     if collapse_map:  # if we dont want the full split on source id
-        new_rows_to_vstack = []
+        cols_to_hstack = []
         for id_tup in collapse_map:
             col_tup = [nid_map[id_] for id_ in id_tup]  #get the cols for that id
-            new_rows_to_vstack = np.sum(data_matrix[:,col_tup], axis=1)
-        data_matrix = np.vstack(new_rows_to_vstack)
-        
+            new_col = np.sum(data_matrix[:,col_tup], axis=1)
+            cols_to_hstack.append(np.vstack(new_col))
+        data_matrix = np.hstack(cols_to_hstack)
     return data_matrix
 
 def discretize(data_matrix):
@@ -385,6 +385,7 @@ def display_heatmap(matrix, row_names, col_names, title):
     #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
     #size = (base + sum(width_ratios)/width_ratios[0], base / ratio * aspect)  #FIXME >_<
     size = (base, base / ratio * aspect)  #FIXME >_<
+    print(size)
     term_fsize = 2
     #fig, (ax1, ax2) = plt.subplots(1, 2, figsize=size, dpi=dpi, sharey=True, gridspec_kw=gskw)  # FIXME for some reason using gridspec breaks imshow and tight_layout a;dslkfja;dslkjf
     fig = plt.figure(figsize=size, dpi=dpi)
@@ -530,7 +531,7 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
 
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    terms = 'hindbrain', #'midbrain', 'forebrain'
+    terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse'
     #terms = 'neurotransmitter', 
     #terms = 'drug of abuse',
     for term in terms:
@@ -541,8 +542,8 @@ def graph_data(load_loc='/tmp/'):
 def main():
     #acquire_data()
     #out = acquire_nt_data()
-    #out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
-    #out= acquire_doa_data()
+    out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
+    out= acquire_doa_data()
     #embed()
 
     graph_data()
