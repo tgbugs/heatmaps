@@ -267,28 +267,23 @@ map_of_datasource_nifids = {} # better to use a dict to map id -> index  XXX val
 
 def get_source_entity_nifids():
     #TODO  WHERE DO THESE ACTUALLY COME FROM!??!!?!
-    query_url = url_serv_summary + "*"
-    id_node, name_node, index = run_xpath(query_url, '//result/@nifId', '//result/@db', '//result/@indexable')  #todo, we may need to also get the name out here :/
-    #to_sort =  [i, n, idx for i, n, idx in zip(id_node, name_node, index)]
-    ids = []
-    to_sort = []
-    for i, n, idx in zip(id_node, name_node, index):
-        if i.content not in ids:
-            ids.append(i.content)
-            name = n.content
-            if name == 'Integrated':
-                name = name + ' ' + idx.content
-            #names.append(name)
-            #to_sort.append((i.content, name + ' ' + i.content))
-            to_sort.append((i.content, name))
-    #print(ids)
-    sort_key = lambda tup: tup[1]
-    out = sorted(to_sort, key=sort_key)
+    summary = get_summary_counts('*')
     ids = []
     names = []
-    for i, n in out:  # FIXME
-        ids.append(i)
-        names.append(n)
+    #counts = []
+    for id_, name, idx, count in summary[0]:
+        if id_ not in ids:
+            ids.append(id_)
+            if name == 'Integrated':
+                name = name + ' ' + idx
+            names.append(name)
+            #counts.append(count)
+            #to_sort.append((id_, name, count))
+
+    #TODO sorting here doesnt help and didn't really reveal much of interest
+    #order = np.argsort(counts)
+    #ids = list(np.array(ids)[order])
+    #names = list(np.array(names)[order])
     return ids, names
 
 def make_collapse_map(ids, names):
@@ -300,7 +295,7 @@ def make_collapse_map(ids, names):
         collapse[name].append(id_)
 
     unames = list(collapse.keys())
-    unames.sort()
+    unames.sort()  # this masks any prior sorting
     ids_list = []
     for n in unames:
         ids_list.append(tuple(collapse[n]))
@@ -555,163 +550,6 @@ def main():
     #out = get_term_file_counts('/tmp/blast_names','species')  #TODO clean up names
 
     graph_data()
-
-
-def _main():
-    asdf = 0
-    #tl = ["brain", "cell", "protein", "hippocampus", "ion channel", "calcium"]
-    #tl = ['midbrain']
-    #relationship = 'part_of'
-    #relationship='proper_part_of'
-
-    #tl = ['Central nervous system']
-    #relationship = 'has_proper_part'  #FIXME the results of the query are truncated so we never get to these!
-    #child_relationship = 'subject'  # this works for 'Central nervous system' but not for brain :/
-
-
-    #all my wat: there is no tree O_O why!?!?!?!?!
-    tl = ["brain"]  #FIXME for reasons I do not entirely understand 
-    relationship = get_rel_id('has_part')
-    #relationship = 'has_proper_part'  # with the NEMO id :/ all my wat
-    child_relationship = 'subject' # use this for brain (mine is currently full of wat) this seems backward from wf
-
-    level = 1  #seems we need to stick with this for now because level = 2 => destroy the server
-
-    #get_rel_id(relationship)
-    #return
-
-    term_ids = [get_term_id(t) for t in tl]
-    print(term_ids)
-
-    childs = {}
-    datas = {}
-    for term_id in term_ids:
-        if term_id != None:
-            child_ids = get_child_term_ids(term_id, level, relationship, child_relationship)
-            childs[term_id] = child_ids
-            child_data = {}
-            continue
-            for child_id in child_ids[0:100]:
-                if child_id in problem_ids:
-                    continue
-                data = get_summary_counts(child_id)
-                print(data)
-                child_data[child_id] = data
-            datas[term_id] = child_data  # so I heard you like dicts so I put dicts in ur dicts
-
-
-    embed()
-
-
-def main__():
-
-    sample_data = {
-        'termid1':[],
-        'termid2':[('nifid1','datasourcename1','indexable',1)],
-        'termid3':[('nifid2','datasourcename2','indexable',2)],
-        'termid4':[('nifid3','datasourcename3','indexable',3)],
-        'termid5':[('nifid2','datasourcename2','indexable',4),('nifid3','datasourcename3','indexable',5)],
-        'termid6':[('nifid1','datasourcename1','indexable',6),('nifid3','datasourcename3','indexable',7)],
-        'termid7':[('nifid1','datasourcename1','indexable',8),('nifid2','datasourcename2','indexable',9)],
-        'termid8':[('nifid1','datasourcename1','indexable',10),('nifid2','datasourcename2','indexable',11),('nifid3','datasourcename3','indexable',12)],
-    }
-
-    sample_source_nifids = [
-        'nifid1',
-        'nifid2',
-        'nifid3',
-        'nifid4',
-    ]
-
-    sample_ids = [  # shuffle these to get the order we want :)
-        'termid1',
-        'termid2',
-        'termid3',
-        'termid4',
-        'termid5',
-        'termid6',
-        'termid7',
-        'termid8',
-    ]
-
-    nifids, nif_names = get_source_entity_nifids()
-
-    mat = construct_columns(sample_data, sample_ids, sample_source_nifids)
-    #f1 = display_heatmap(mat, sample_ids, sample_source_nifids, 'test')
-    
-    """
-
-    # anamotical regions
-    #real_data = get_term_count_data('brain', 1, get_rel_id('has_part'), 'subject')
-    level = 2
-    brain_data, brain_idn_dict = get_term_count_data('midbrain', level, 'has_proper_part', 'subject')
-    bd2, bn2 = get_term_count_data('forebrain', level, 'has_proper_part', 'subject')
-    bd3, bn3 = get_term_count_data('hindbrain', level, 'has_proper_part', 'subject')
-    brain_data.update(bd2)
-    brain_data.update(bd3)
-    brain_idn_dict.update(bn2)
-    brain_idn_dict.update(bn3)
-    # TODO sort on the hierarchy
-    row_ids = list(brain_data.keys())
-    mat2 = construct_columns(brain_data, row_ids, nifids)
-    mat2_d = discretize(mat2)
-    row_names = []
-    for rid in row_ids:
-        name = brain_idn_dict[rid]
-        row_names.append(name)
-    f2 = display_heatmap(mat2_d, row_names, nifids, 'brain partonomy')
-
-    #species FIXME need to figure out how to actually traverse the ncbi taxonomy
-    species_data, species_idn_dict = get_term_count_data('eukaryota', 6, 'subClassOf', 'object')
-    rownames3 = list(species_data.keys())
-    mat3 = construct_columns(species_data, rownames3, nifids)
-    mat3_d = discretize(mat3)  #FIXME in place ;_;
-    f3 = display_heatmap(mat3_d, rownames3, nifids, 'species')
-
-    #"""
-    #brain parts
-    
-    #
-    #embed()
-    return
-
-def display_heatmap_(matrix, row_names, col_names, title):  # w/o div metric
-    #blanks = np.zeros_like(matrix[0])
-    #matrix = np.vstack((blanks, matrix, blanks))
-    #row_names = [''] + row_names + ['']
-    aspect = .3
-    #mm = float(max(matrix.shape)) #python2 a shit
-    ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
-    print('ratio', ratio)
-    base = 22  #width
-    dpi = 600
-    #size = (matrix.shape[1] / mm * base * (1/aspect), matrix.shape[0] / mm * base + 1)  #FIXME deal with the font vs figsize :/
-    size = (base, base / ratio * aspect)
-    print('size',size)
-    fig, ax = plt.subplots(figsize=size, dpi=dpi)
-
-    img = ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect=aspect)#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
-
-    #axes
-    ax.xaxis.set_ticks([i for i in range(len(col_names))])
-    ax.xaxis.set_ticklabels(col_names)
-    ax.xaxis.set_ticks_position('top')
-    [l.set_rotation(90) for l in ax.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
-    [l.set_fontsize(int(base * .25)) for l in ax.xaxis.get_ticklabels()]
-
-    ax.yaxis.set_ticks([i for i in range(len(row_names))])
-    ax.yaxis.set_ticklabels(row_names)
-    ax.yaxis.set_ticks_position('left')
-    [l.set_fontsize(int(base / ratio * aspect * .75)) for l in ax.yaxis.get_ticklabels()]
-
-    ax.tick_params(direction='in', length=0, width=0)
-
-    fig.suptitle(title, x=.5, y=.01, fontsize=base*.25, verticalalignment='bottom')
-    #embed()
-
-    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
-    #fig.show()
-    return fig
 
 
 if __name__ == "__main__":
