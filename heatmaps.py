@@ -416,7 +416,7 @@ def display_heatmap(matrix, row_names, col_names, title):
     ax1.tick_params(direction='in', length=0, width=0)
 
     #axis 2
-    div = compute_diversity(matrix)
+    div = compute_diversity(matrix)  # FIXME this is called twice :/
     #width = 1
     #other = [i - .5 for i in range(len(div))]  # FIXME ICK
     ll, ul = ax1.get_ylim()
@@ -471,9 +471,13 @@ def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn 
         row_ids = list(data.keys())
         collapse_map, unames = make_collapse_map(resource_ids, resource_names)
         matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
-        discre = discretize(matrix)
+        div = compute_diversity(matrix)
+        order = np.argsort(div)[::-1]  # start high
+        discre = discretize(matrix[order])
         row_names = []
-        for rid in row_ids:
+        for i in order:
+        #for rid in row_ids:
+            rid = row_ids[i]
             name = idn_dict[rid]
             row_names.append(name)
 
@@ -532,10 +536,10 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
 
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    #terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse'
+    terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse', 'species'
     #terms = 'neurotransmitter', 
     #terms = 'drug of abuse',
-    terms = 'species', 'neurotransmitter', 'drug of abuse'
+    #terms = 'species', #'neurotransmitter', 'drug of abuse'
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
