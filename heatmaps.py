@@ -366,6 +366,74 @@ def compute_diversity(matrix):
     print(sources_per_term)
     return sources_per_term
 
+def display_grid(mats, rns, col_names):
+    aspect = .3
+    ratio = float(mats[0].shape[1] + 1) / float(sum([m.shape[0] for m in mats]) + 1)  # cols / rows
+    gcols = 2
+    grows = len(mats)
+
+    base = 22
+    dpi = 600
+    width_ratios = 98,2
+    size = (base, base / ratio * aspect)  #FIXME >_<
+    term_fsize = 2
+
+    fig = plt.figure(figsize=size, dpi=dpi)
+    gs = plt.matplotlib.gridspec.GridSpec(grows, gcols, hspace=0, wspace=0, height_ratios = [m.shape[0] for m in mats], width_ratios=width_ratios)
+    axes = []
+    for r in range(grows):
+        matrix = mats[r]
+        row_names = rns[r]
+        if axes:
+            ax1 = fig.add_subplot(gs[r,0], sharex=axes[0][0])
+        else:
+            ax1 = fig.add_subplot(gs[r,0])
+        ax2 = fig.add_subplot(gs[r,1], sharey=ax1)
+
+     
+        #axis 1
+        img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto')
+
+        #axes
+        ax1.xaxis.set_ticks([i for i in range(len(col_names))])
+        ax1.xaxis.set_ticklabels(col_names)
+        ax1.xaxis.set_ticks_position('top')
+        [l.set_rotation(90) for l in ax1.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
+        [l.set_fontsize(int(base * .25)) for l in ax1.xaxis.get_ticklabels()]
+        if(axes):
+            #plt.setp(ax1.get_xticklabels(), visible=False)
+            ax1.xaxis.set_tick_params(label1On=False,label2On=False)
+        #embed()
+
+        ax1.yaxis.set_ticks([i for i in range(len(row_names))])
+        ax1.yaxis.set_ticklabels(row_names)
+        ax1.yaxis.set_ticks_position('left')
+        [l.set_fontsize(term_fsize) for l in ax1.yaxis.get_ticklabels()]
+
+        ax1.tick_params(direction='in', length=0, width=0)
+
+        #axis 2
+        div = compute_diversity(matrix)  # FIXME this is called twice :/
+        ll, ul = ax1.get_ylim()
+        width = (ul - ll) / matrix.shape[0]
+        other = np.arange(ll, ul, width)[::-1]  # for whatever reason backwards, probably imshow idiocy
+        ax2.barh(other, div, width, edgecolor='None')  #FIXME for some reason horizonal breaks things?
+        ax2.yaxis.set_ticks_position('right')
+        [l.set_fontsize(term_fsize) for l in ax2.yaxis.get_ticklabels()]
+        ax2.set_xlim(0,1)
+        ax2.tick_params(direction='in', length=0, width=0)
+        ax2.xaxis.set_ticks([0,.5,1])
+        ax2.xaxis.set_ticklabels(['0','.5','1'])
+        [l.set_fontsize(int(base * .25)) for l in ax2.xaxis.get_ticklabels()]
+
+        axes.append((ax1, ax2))
+
+           
+    title = 'partonomy'
+    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
+
+
+
 def display_heatmap(matrix, row_names, col_names, title):
     #blanks = np.zeros_like(matrix[0])
     #matrix = np.vstack((blanks, matrix, blanks))
@@ -540,6 +608,34 @@ def graph_data(load_loc='/tmp/'):
             levels = pickle.load(f)
         disp_levels(levels, nifids, nif_names)
 
+def graph_partonomy(load_loc='/tmp/'):
+    resource_ids, resource_names = get_source_entity_nifids()
+    terms = 'hindbrain', 'midbrain', 'forebrain',
+    mats = []
+    rns = []
+    for term in terms:
+        with open(load_loc+term+'.pickle','rb') as f:
+            level_dict = pickle.load(f)
+        term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
+        for level, (data, idn_dict) in level_dict.items():
+            row_ids = list(data.keys())
+            collapse_map, unames = make_collapse_map(resource_ids, resource_names)
+            matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
+            div = compute_diversity(matrix)
+            order = np.argsort(div)[::-1]  # start high
+            discre = discretize(matrix[order])
+            row_names = []
+            for i in order:
+            #for rid in row_ids:
+                rid = row_ids[i]
+                name = idn_dict[rid]
+                row_names.append(name)
+            mats.append(discre)
+            rns.append(row_names)
+
+    display_grid(mats, rns, unames)
+
+
 def main():
     #acquire_data()
     #out = acquire_nt_data()
@@ -549,7 +645,8 @@ def main():
 
     #out = get_term_file_counts('/tmp/blast_names','species')  #TODO clean up names
 
-    graph_data()
+    #graph_data()
+    graph_partonomy()
 
 
 if __name__ == "__main__":
