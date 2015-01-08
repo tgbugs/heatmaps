@@ -65,7 +65,7 @@ def get_xpath(doc, query):
 def run_xpath(url, *queries):
     #xmlDoc = libxml2.parseEntity(url)  #XXX this causes hangs due to no timeout
     try:
-        resp = requests.get(url, timeout=999)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
+        resp = requests.get(url, timeout=20)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
     except requests.exceptions.Timeout:
         return [None] * len(queries)
     xmlDoc = libxml2.parseDoc(resp.text)
@@ -224,17 +224,18 @@ def get_term_count_data(term, level, relationship, child_relationship, exclude_p
         term_id = get_term_id(term)  # FIXME this fails to work as expected given relationships
     child_data = {}
     if term_id == None:
-        print('ERROR:',term,'could not find an id!')
-        return {}, {}
+        term_id = term
+        #print('ERROR:',term,'could not find an id!')
+        #return {}, {}
+    #else:
+    if level == 0:  # FIXME surely there is a more rational place to put this?
+        id_name_dict = {term_id:term}
     else:
-        if level == 0:  # FIXME surely there is a more rational place to put this?
-            id_name_dict = {term_id:term}
-        else:
-            id_name_dict = get_child_term_ids(term_id, level, relationship, child_relationship, exclude_parents=exclude_parents)  # TODO this is one place we could add the level info??
-        for child_id in id_name_dict.keys():#[0:10]:
-            data, term_name = get_summary_counts(child_id)
-            print(data)
-            child_data[child_id] = data
+        id_name_dict = get_child_term_ids(term_id, level, relationship, child_relationship, exclude_parents=exclude_parents)  # TODO this is one place we could add the level info??
+    for child_id in id_name_dict.keys():#[0:10]:
+        data, term_name = get_summary_counts(child_id)
+        print(data)
+        child_data[child_id] = data
     return child_data, id_name_dict
 
 problem_ids = ['birnlex_1700', 'birnlex_1571', 'birnlex_1570','birnlex_1577',
@@ -534,7 +535,7 @@ def graph_data(load_loc='/tmp/'):
     #terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse'
     #terms = 'neurotransmitter', 
     #terms = 'drug of abuse',
-    terms = 'species',
+    terms = 'species', 'neurotransmitter', 'drug of abuse'
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
@@ -547,7 +548,7 @@ def main():
     #out= acquire_doa_data()
     #embed()
 
-    out = get_term_file_counts('/tmp/blast_names','species')  #TODO clean up names
+    #out = get_term_file_counts('/tmp/blast_names','species')  #TODO clean up names
 
     graph_data()
 
