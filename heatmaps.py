@@ -64,11 +64,17 @@ def get_xpath(doc, query):
 
 def run_xpath(url, *queries):
     #xmlDoc = libxml2.parseEntity(url)  #XXX this causes hangs due to no timeout
+    xmlDoc = libxml2.parseFile('/home/tom/Dropbox/neuroinformatics/force15_poster/summary.xml')
+    """
     try:
         resp = requests.get(url, timeout=20)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
     except requests.exceptions.Timeout:
         return [None] * len(queries)
-    xmlDoc = libxml2.parseDoc(resp.text)
+    try:
+        xmlDoc = libxml2.parseDoc(resp.text)
+    except libxml2.parserError:  # derp 
+        return [None] * len(queries)
+    #"""
     xpc = xmlDoc.xpathNewContext()
     out = []
     for query in queries:
@@ -462,7 +468,7 @@ def display_heatmap(matrix, row_names, col_names, title):
                       
 
     #axis 1
-    img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto')#, aspect=aspect, extent=(0,matrix.shape[1]+1,0,matrix.shape[0]+1))#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
+    img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto',vmin=0,vmax=3)#, aspect=aspect, extent=(0,matrix.shape[1]+1,0,matrix.shape[0]+1))#, vmin=0, vmax=np.max(matrix))  #FIXME x axis spacing :/  #FIXME consider pcolormesh?
 
     #axes
     ax1.xaxis.set_ticks([i for i in range(len(col_names))])
@@ -531,6 +537,69 @@ def run_levels(term, level, relationship, child_relationship, term_id=None):
 
     return level_dict
 
+def display_div(div, names, levels, term, nterms=60):
+    order = np.argsort(div)
+    div = np.array(div)[order][-nterms:]
+    row_names = np.array(names)[order][-nterms:]
+    levels = np.array(levels)[order][-nterms:]
+    colors = {
+        0:'b',
+        1:'g',
+        2:'r',
+        3:'c',
+        4:'y',
+        5:'m',
+        6:'gray',
+    }
+
+    #ll, ul = ax1.get_ylim()
+    #width = (ul - ll) / matrix.shape[0]
+    #other = np.arange(ll, ul, width)[::-1]  # for whatever reason backwards, probably imshow idiocy
+    base = 5  #width
+    height = int(len(div) / 10) + 2
+    dpi = 600
+    #fakefig = plt.figure()
+    fig = plt.figure(figsize=(5,height),dpi=dpi)
+    ax2 = fig.add_subplot(111)
+    #fig, ax2 = plt.subplots(figsize=(5,20),dpi=dpi)
+    width = 1
+    term_fsize = 9.5
+    other = np.arange(len(div)) - .5
+    hands = []
+    labs = []
+    for l, c in colors.items():
+        subset = levels == l
+        if subset.any():
+            lab = 'lvl %s, n = %s'%(l,len(div[subset]))
+            h = ax2.barh(other[subset], div[subset], width, color=c, edgecolor='None', label=lab)  #FIXME for some reason horizonal breaks things?
+            hands.append(h)
+            labs.append(lab)
+
+    ax2.yaxis.set_ticks_position('right')
+    [l.set_fontsize(term_fsize) for l in ax2.yaxis.get_ticklabels()]
+    ax2.set_xlim(0,1)
+    ax2.tick_params(direction='in', length=0, width=0)
+    ax2.xaxis.set_ticks([0,.5,1])
+    ax2.xaxis.set_ticklabels(['0','.5','1'])
+    #ax2.xaxis.set_ticks_position('top')
+    #[l.set_fontsize(int(base * .25)) for l in ax2.xaxis.get_ticklabels()]
+    [l.set_fontsize(10) for l in ax2.xaxis.get_ticklabels()]
+    
+    ax2.yaxis.set_ticks([i for i in range(len(row_names))])
+    ax2.yaxis.set_ticklabels(row_names)
+    ax2.yaxis.set_ticks_position('left')
+    ax2.set_ylim(-.5, len(div)-.5)
+    [l.set_fontsize(term_fsize) for l in ax2.yaxis.get_ticklabels()]
+    ax2.legend(loc='lower right',fontsize='small', frameon=False, borderpad=None)
+    #fig.legend(hands, labs, loc=4)
+    #plt.legend()
+    fig.tight_layout()
+
+    plt.title(term.capitalize()+' frequencies. Top %s terms.'%nterms,loc='right')
+
+    fig.savefig('/tmp/%s_div.png'%term, bbox_inches='tight', pad_inches=.1, dpi=dpi)
+
+
 def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
     term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
@@ -577,6 +646,24 @@ def acquire_doa_data(save_loc='/tmp/'):
             pickle.dump(levels, f)
     return levels
 
+def acquire_dis_data(save_loc='/tmp/'):
+    terms = 'nervous system disease',
+    term_ids = None, 
+    for term, term_id in zip(terms, term_ids):
+        levels = run_levels(term, 5, 'subClassOf', 'object', term_id=term_id)  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+        with open(save_loc+term+'.pickle','wb') as f:
+            pickle.dump(levels, f)
+    return levels
+
+def acquire_type_data(save_loc='/tmp/'):
+    terms = 'neuron',
+    term_ids = None, 
+    for term, term_id in zip(terms, term_ids):
+        levels = run_levels(term, 5, 'subClassOf', 'object', term_id=term_id)  # TODO need to fix level 1 of this w/ the parts of the superior coliculus >_<
+        with open(save_loc+term+'.pickle','wb') as f:
+            pickle.dump(levels, f)
+    return levels
+
 def get_term_file_counts(term_file, name, save_loc='/tmp/'):
     """ given a list of terms return the counts for each """
     with open(term_file) as f:
@@ -602,10 +689,11 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
 
 def graph_data(load_loc='/tmp/'):
     nifids, nif_names = get_source_entity_nifids()
-    terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse', 'species'
+    #terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse', 'species'
     #terms = 'neurotransmitter', 
     #terms = 'drug of abuse',
     #terms = 'species', #'neurotransmitter', 'drug of abuse'
+    terms = 'nervous system disease',
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
@@ -618,7 +706,7 @@ def graph_partonomy(load_loc='/tmp/', terms=[], titles=None, flatten=False, fign
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             level_dict = pickle.load(f)
-        term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
+        #term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
 
         if flatten:
             if len(level_dict.keys()) > 1:  # 0 -> already flat
@@ -632,6 +720,9 @@ def graph_partonomy(load_loc='/tmp/', terms=[], titles=None, flatten=False, fign
             levels = list(level_dict.keys())
             levels.sort()  #gurantee order
 
+        comp_div = []
+        comp_names = []
+        comp_levels = []
         for level in levels:
             data, idn_dict = level_dict[level]
             row_ids = list(data.keys())
@@ -648,13 +739,31 @@ def graph_partonomy(load_loc='/tmp/', terms=[], titles=None, flatten=False, fign
                 row_names.append(name)
             mats.append(discre)
             rns.append(row_names)
+
+            comp_div.extend(div)
+            comp_names.extend([idn_dict[rid] for rid in row_ids])
+            comp_levels.extend([level] * len(div))
+
+
+        display_div(comp_div, comp_names, comp_levels, term)
     if titles == None:
+        #titles = [None]*(len(mats) - 1) + ['Brain partonomy']
+        #titles = [None]*(len(mats) - 1) + ['Diseases']
+        #titles = [None]*(len(mats) - 1) + ['Neuron types']
         titles = [None]*len(mats)
         hspace = 0
     else:
         hspace = .1
-    display_grid(mats, rns, titles, unames, figname, hspace=hspace)
+    #embed()
+    #display_grid(mats, rns, titles, unames, figname, hspace=hspace)
 
+def make_legend():
+    fig = figure()
+    ax1 = fig.add_subplot()
+    ax2 = fig.add_subplot()
+    matrix = [None, 1, 2, 3]
+    img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto', vmin=0, vmax=3)
+    ax1.barh(0,1,.5,'')
 
 def main():
     #acquire_data()
@@ -665,12 +774,26 @@ def main():
 
     #out = get_term_file_counts('/tmp/blast_names','species')  #TODO clean up names
 
+    #out = acquire_dis_data()
     #graph_data()
-    brain_terms = 'hindbrain', 'midbrain', 'forebrain',
-    graph_partonomy(terms=brain_terms, figname='partonomy')
-    other_terms = 'species', 'neurotransmitter', 'drug of abuse'
-    other_titles = 'Species', 'Neurotransmitters', 'Drugs of abuse'
+
+    #out = acquire_type_data()
+
+
+    #"""
+    #neu_terms = 'neuron',
+    #graph_partonomy(terms=neu_terms, figname='Neuron Types')
+
+    #dis_terms = 'nervous system disease',
+    #graph_partonomy(terms=dis_terms, figname='diseases')
+
+    #brain_terms = 'hindbrain', 'midbrain', 'forebrain',
+    #graph_partonomy(terms=brain_terms, figname='partonomy')
+
+    other_terms = 'species', #'neurotransmitter', 'drug of abuse'
+    other_titles = 'Species', #'Neurotransmitters', 'Drugs of abuse'
     graph_partonomy(terms=other_terms,flatten=True,titles=other_titles, figname='others')
+    #"""
 
 
 if __name__ == "__main__":
