@@ -787,12 +787,12 @@ def main():
     #dis_terms = 'nervous system disease',
     #graph_partonomy(terms=dis_terms, figname='diseases')
 
-    #brain_terms = 'hindbrain', 'midbrain', 'forebrain',
-    #graph_partonomy(terms=brain_terms, figname='partonomy')
+    brain_terms = 'hindbrain', 'midbrain', 'forebrain',
+    graph_partonomy(terms=brain_terms, figname='partonomy')
 
-    other_terms = 'species', #'neurotransmitter', 'drug of abuse'
-    other_titles = 'Species', #'Neurotransmitters', 'Drugs of abuse'
-    graph_partonomy(terms=other_terms,flatten=True,titles=other_titles, figname='others')
+    #other_terms = 'species', #'neurotransmitter', 'drug of abuse'
+    #other_titles = 'Species', #'Neurotransmitters', 'Drugs of abuse'
+    #graph_partonomy(terms=other_terms,flatten=True,titles=other_titles, figname='others')  # species 227
     #"""
 
 
