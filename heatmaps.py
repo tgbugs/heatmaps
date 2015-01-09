@@ -341,7 +341,7 @@ def construct_columns(data_dict, term_id_list, datasource_nifid_list, collapse_m
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
-    vals = [0,1,2,3]
+    vals = [None,1,2,3]
 
     #for l in bins[:-1]:
         #for u in bins[1:]:
@@ -366,7 +366,7 @@ def compute_diversity(matrix):
     print(sources_per_term)
     return sources_per_term
 
-def display_grid(mats, rns, col_names):
+def display_grid(mats, rns, titles, col_names, figname, hspace=0):
     aspect = .3
     ratio = float(mats[0].shape[1] + 1) / float(sum([m.shape[0] for m in mats]) + 1)  # cols / rows
     gcols = 2
@@ -379,7 +379,7 @@ def display_grid(mats, rns, col_names):
     term_fsize = 2
 
     fig = plt.figure(figsize=size, dpi=dpi)
-    gs = plt.matplotlib.gridspec.GridSpec(grows, gcols, hspace=0, wspace=0, height_ratios = [m.shape[0] for m in mats], width_ratios=width_ratios)
+    gs = plt.matplotlib.gridspec.GridSpec(grows, gcols, hspace=hspace, wspace=0, height_ratios = [m.shape[0] for m in mats], width_ratios=width_ratios)
     axes = []
     for r in range(grows):
         matrix = mats[r]
@@ -392,7 +392,7 @@ def display_grid(mats, rns, col_names):
 
      
         #axis 1
-        img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto')
+        img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto', vmin=0, vmax=3)
 
         #axes
         ax1.xaxis.set_ticks([i for i in range(len(col_names))])
@@ -400,10 +400,14 @@ def display_grid(mats, rns, col_names):
         ax1.xaxis.set_ticks_position('top')
         [l.set_rotation(90) for l in ax1.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
         [l.set_fontsize(int(base * .25)) for l in ax1.xaxis.get_ticklabels()]
-        if(axes):
+        if axes:
             #plt.setp(ax1.get_xticklabels(), visible=False)
             ax1.xaxis.set_tick_params(label1On=False,label2On=False)
-        #embed()
+        print('axis label', titles[r])
+        ax1.xaxis.set_label_text(titles[r])
+        ax1.xaxis.set_label_position('bottom')
+        #if titles[r]:
+            #embed()
 
         ax1.yaxis.set_ticks([i for i in range(len(row_names))])
         ax1.yaxis.set_ticklabels(row_names)
@@ -428,8 +432,7 @@ def display_grid(mats, rns, col_names):
 
         axes.append((ax1, ax2))
 
-           
-    title = 'partonomy'
+    title = figname 
     fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
 
 
@@ -535,7 +538,7 @@ def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn 
         collapse_map, unames = make_collapse_map(resource_ids, resource_names)
         matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
         div = compute_diversity(matrix)
-        order = np.argsort(div)[::-1]  # start high
+        order = np.argsort(div)#[::-1]  # start high # nope, trees better
         discre = discretize(matrix[order])
         row_names = []
         for i in order:
@@ -608,21 +611,34 @@ def graph_data(load_loc='/tmp/'):
             levels = pickle.load(f)
         disp_levels(levels, nifids, nif_names)
 
-def graph_partonomy(load_loc='/tmp/'):
+def graph_partonomy(load_loc='/tmp/', terms=[], titles=None, flatten=False, figname='test'):
     resource_ids, resource_names = get_source_entity_nifids()
-    terms = 'hindbrain', 'midbrain', 'forebrain',
     mats = []
     rns = []
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             level_dict = pickle.load(f)
         term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
-        for level, (data, idn_dict) in level_dict.items():
+
+        if flatten:
+            if len(level_dict.keys()) > 1:  # 0 -> already flat
+                flat = {0:({},{})}
+                for level, (data, idn_dict) in level_dict.items():
+                    flat[0][0].update(data)
+                    flat[0][1].update(idn_dict)
+                level_dict = flat
+            levels = [0]
+        else:
+            levels = list(level_dict.keys())
+            levels.sort()  #gurantee order
+
+        for level in levels:
+            data, idn_dict = level_dict[level]
             row_ids = list(data.keys())
             collapse_map, unames = make_collapse_map(resource_ids, resource_names)
             matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
             div = compute_diversity(matrix)
-            order = np.argsort(div)[::-1]  # start high
+            order = np.argsort(div)#[::-1]  # start high #NOPE trees better than ice
             discre = discretize(matrix[order])
             row_names = []
             for i in order:
@@ -632,8 +648,12 @@ def graph_partonomy(load_loc='/tmp/'):
                 row_names.append(name)
             mats.append(discre)
             rns.append(row_names)
-
-    display_grid(mats, rns, unames)
+    if titles == None:
+        titles = [None]*len(mats)
+        hspace = 0
+    else:
+        hspace = .1
+    display_grid(mats, rns, titles, unames, figname, hspace=hspace)
 
 
 def main():
@@ -646,7 +666,11 @@ def main():
     #out = get_term_file_counts('/tmp/blast_names','species')  #TODO clean up names
 
     #graph_data()
-    graph_partonomy()
+    brain_terms = 'hindbrain', 'midbrain', 'forebrain',
+    graph_partonomy(terms=brain_terms, figname='partonomy')
+    other_terms = 'species', 'neurotransmitter', 'drug of abuse'
+    other_titles = 'Species', 'Neurotransmitters', 'Drugs of abuse'
+    graph_partonomy(terms=other_terms,flatten=True,titles=other_titles, figname='others')
 
 
 if __name__ == "__main__":
