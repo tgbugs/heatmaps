@@ -600,6 +600,90 @@ def display_div(div, names, levels, term, nterms=60):
     fig.savefig('/tmp/%s_div.png'%term, bbox_inches='tight', pad_inches=.1, dpi=dpi)
 
 
+###
+#   Acqusition
+###
+
+class BaseDatagetter:
+    """
+        Datagetter classes should implement all the methods needed to do 3 things
+        1) retrieve the raw data and put it in structured form
+        2) sort the raw data
+        3) collapse the raw data
+        This class will actually RETRIEVE the data and save it so that it can be opperated on later 
+        Often we will actually BUILD the collapse map or sort using only the raw data and thus
+        we will not need the functionality provided here.
+        NOTE: This class shall deal with REMOTE resources that CHANGE
+        NOTE: This class is what we will use to map DIVERSELY formatted data
+        into our common internal format, so make it good.
+        NOTE: one problem to consider is that this is going to assume that the "datum" indexed
+        is a scalar, but surely we can do better and make it work as long as the datatype is consistent
+        across all indecies (eg a bitmap, or a time series, or anything set of things that all produce valid
+        output from an arbitrary function f or set of functions)
+
+        NOTE: if you don't need an index and are just going to use 0...n then you probably can just use dg.get()
+    """
+    def __init__(self):
+        self.indicies = []
+        self.get()
+
+    def get_indecies(self):
+        """ n should be number of the index. If not given auto? grrrr
+            or rather, this method should get ALL the indexes
+            This could read in from a text file or from the internet.
+            We reccomend defining the different functions as class methods
+            and then calling them from here.
+        """
+        raise NotImplemented
+        # RULE the objects returned by the function that queries index_one
+        # should themselves contain denormalized references named by objects in index_two
+        index = ['hello','i','am','a','valid','index']  # TODO uniqueness??
+        self.indicies.append(index)
+
+    def get_collapse_map(self):
+        """ If you are going to sum the quantitative values across fields and there
+            is an external source for mapping those fields
+        """
+        raise NotImplemented
+
+    def get_sort_map(self):
+        raise NotImplemented
+        
+    def get(self):
+        """ Replace this method to define how to retrieve the data"""
+        raise NotImplemented
+
+    def _make_metadata(self):
+        """ Store standard metadata such as date and time """
+        pass
+
+    def store(self):
+        """ Store the retrieved results somehwere for now, we pickle
+            Consider also sqlite or postgress
+        """
+        raise NotImplemented
+
+class XMLDatagetter(BaseDatagetter):
+    def __init__(self, timeout=8):
+        self.timeout = timeout 
+    def get_xml(self, url):
+        try:
+            self.resp = requests.get(url, timeout=self.timeout)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
+        except requests.exceptions.Timeout:
+            #TODO
+        try:
+            self.xmlDoc = libxml2.parseDoc(resp.text)
+        except libxml2.parserError:  # derp 
+            #TODO
+
+    def run_xpath(self, query):
+        self.
+
+class NIFSummary(BaseDatagetter):
+    def __init__(self):
+        pass
+    def get
+
 def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
     term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
