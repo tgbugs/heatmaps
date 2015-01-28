@@ -64,8 +64,9 @@ def get_xpath(doc, query):
 
 def run_xpath(url, *queries):
     #xmlDoc = libxml2.parseEntity(url)  #XXX this causes hangs due to no timeout
-    xmlDoc = libxml2.parseFile('/home/tom/Dropbox/neuroinformatics/force15_poster/summary.xml')
-    """
+    #xmlDoc = libxml2.parseFile('/home/tom/Dropbox/neuroinformatics/force15_poster/summary.xml')
+    #print("WARNING YOU ARE NOT GETTING REAL DATA")
+    #"""
     try:
         resp = requests.get(url, timeout=20)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
     except requests.exceptions.Timeout:
@@ -671,18 +672,21 @@ class XMLDatagetter(BaseDatagetter):
             self.resp = requests.get(url, timeout=self.timeout)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
         except requests.exceptions.Timeout:
             #TODO
+            pass
         try:
             self.xmlDoc = libxml2.parseDoc(resp.text)
         except libxml2.parserError:  # derp 
             #TODO
+            pass
 
     def run_xpath(self, query):
-        self.
+        self
 
 class NIFSummary(BaseDatagetter):
     def __init__(self):
         pass
-    def get
+    def get(self):  #XXX I HAVE NO IDEA WHAT
+        pass
 
 def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
     term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
@@ -849,7 +853,13 @@ def make_legend():
     img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto', vmin=0, vmax=3)
     ax1.barh(0,1,.5,'')
 
+def run_auditory_terms():
+    out = get_term_file_counts('/tmp/auditory_terms','auditory')  # TODO pickup where left of if something breaks in long jobs
+    embed()
+
+
 def main():
+    run_auditory_terms()
     #acquire_data()
     #out = acquire_nt_data()
     #out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
@@ -871,8 +881,8 @@ def main():
     #dis_terms = 'nervous system disease',
     #graph_partonomy(terms=dis_terms, figname='diseases')
 
-    brain_terms = 'hindbrain', 'midbrain', 'forebrain',
-    graph_partonomy(terms=brain_terms, figname='partonomy')
+    #brain_terms = 'hindbrain', 'midbrain', 'forebrain',
+    #graph_partonomy(terms=brain_terms, figname='partonomy')
 
     #other_terms = 'species', #'neurotransmitter', 'drug of abuse'
     #other_titles = 'Species', #'Neurotransmitters', 'Drugs of abuse'
