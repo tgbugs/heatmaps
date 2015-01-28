@@ -58,7 +58,10 @@ def get_xpath(doc, query):
         query is a string that is a valid xpath query
         returns a list of nodes
     """
-    node = libxml2.parseDoc(doc)
+    try:
+        node = libxml2.parseDoc(doc)
+    except libxml2.parserError:  # derp 
+        return []
     xpc = node.xpathNewContext()
     return xpc.xpathEval(query)
 
