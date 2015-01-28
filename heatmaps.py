@@ -107,7 +107,10 @@ def get_rel_id(relationship):  #FIXME this is NOT consistently ordred! AND is_a 
 def get_term_id(term):
     """ Return the id for a term or None if an error occures """
     query_url = url_oq_con_term + term.replace(" ", "%20")
-    response = requests.get(query_url)
+    try:
+        response = requests.get(query_url, timeout=20)
+    except requests.exceptions.Timeout:
+        return None
     ids = get_xpath(response.text, term_id_xpath)
     #ids = run_xpath(query_url, term_id_xpath)
     try:
