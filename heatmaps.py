@@ -544,7 +544,9 @@ def run_levels(term, level, relationship, child_relationship, term_id=None):
 
     return level_dict
 
-def display_div(div, names, levels, term, nterms=60):
+def display_div(div, names, levels, term, nterms=300):
+    if nterms == None:
+        nterms = len(div)
     order = np.argsort(div)
     div = np.array(div)[order][-nterms:]
     row_names = np.array(names)[order][-nterms:]
@@ -563,7 +565,7 @@ def display_div(div, names, levels, term, nterms=60):
     #width = (ul - ll) / matrix.shape[0]
     #other = np.arange(ll, ul, width)[::-1]  # for whatever reason backwards, probably imshow idiocy
     base = 5  #width
-    height = int(len(div) / 10) + 2
+    height = nterms // 10 + 2
     dpi = 600
     #fakefig = plt.figure()
     fig = plt.figure(figsize=(5,height),dpi=dpi)
@@ -787,7 +789,8 @@ def graph_data(load_loc='/tmp/'):
     #terms = 'neurotransmitter', 
     #terms = 'drug of abuse',
     #terms = 'species', #'neurotransmitter', 'drug of abuse'
-    terms = 'nervous system disease',
+    #terms = 'nervous system disease',
+    terms = 'auditory',
     for term in terms:
         with open(load_loc+term+'.pickle','rb') as f:
             levels = pickle.load(f)
@@ -865,7 +868,11 @@ def run_auditory_terms():
 
 
 def main():
-    run_auditory_terms()
+    #run_auditory_terms()
+    aud_terms = 'auditory',
+    graph_partonomy(terms=aud_terms, figname='Auditory Terms')
+    #graph_data() # FIXME
+
     #acquire_data()
     #out = acquire_nt_data()
     #out = get_term_file_counts('/tmp/neurotransmitters','neurotransmitter')   # FIXME NOTE: one thing to consider is how to deal to references to certain molecules which are NOT about its context as a neurotransmitter... THAT could be tricky
