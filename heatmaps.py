@@ -6,6 +6,19 @@ Options:
     -t --term_file=<file>       newline separate list of terms
     -p --pickle_file=<file>
 """
+
+#TODO
+# convert to class based
+# inputs should take
+#   a list of terms
+#   a root term and a property relationship
+#   a tree of nodes (ids) and edges (property, or possibly conditional properties)
+# rest API
+# 
+#
+#
+#
+
 import os
 import pickle
 from collections import defaultdict
@@ -880,6 +893,7 @@ def make_legend():
     ax1.barh(0,1,.5,'')
 
 def main():
+
     if args['--term_file']:
         path = args['--term_file']
         dirname = os.path.dirname(path)
@@ -888,8 +902,8 @@ def main():
         embed()
     if args['--pickle_file']:
         path = args['--pickle_file']
-        graph_partonomy((path,))
-        graph_data((path,))
+        graph_partonomy((path,))  # FIXME output naming
+        graph_data((path,))  # FIXME output naming
 
 
     #run_auditory_terms()
