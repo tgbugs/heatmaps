@@ -789,7 +789,7 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
     level_dict = {0:(datas, idns)}
 
 
-    with open(save_loc+name+'.pickle','wb') as f:
+    with open(save_loc+os.sep+name+'.pickle','wb') as f:
         pickle.dump(level_dict, f)
 
     return level_dict
