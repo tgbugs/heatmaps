@@ -1,7 +1,12 @@
 """
 Usage:
-    heatmaps.py
+    heatmaps.py [ --term_file=<file> --pickle_file=<file> ]
+    heatmaps.py -h | --help
+Options:
+    -t --term_file=<file>       newline separate list of terms
+    -p --pickle_file=<file>
 """
+import os
 import pickle
 from collections import defaultdict
 
@@ -181,10 +186,12 @@ def get_child_term_ids(parent_id, level, relationship, child_relationship, exclu
         return id_name_dict
 
 def get_summary_counts(id_):
+    if ' ' in id_:
+        id_ = '"%s"'%id_  # fix to prevent AND expansion RE: this kills service
     print('getting summary for', id_)
     query_url = url_serv_summary + id_
     #nodes = run_xpath(query_url, '//results/result')
-    nodes, name = run_xpath(query_url, '//results/result', '//clauses/query')
+    nodes, name, lit = run_xpath(query_url, '//results/result', '//clauses/query', '//literatureSummary/@resultCount')
     if name:
         name = name[0].content
         print(name)
@@ -219,6 +226,12 @@ def get_summary_counts(id_):
             counts.append(count)
         else:
             print(node.prop('nifId'))
+
+    #literature
+    nifIds.append('nlx_82958')
+    dbs.append('PubMed')  # this is a fiction, it comes from PMC too
+    indexables.append('Literature')
+    counts.append(int(lit[0].content))
 
     print(dbs)
     return [a for a in zip(nifIds, dbs, indexables, counts)], name
@@ -279,10 +292,9 @@ full_list_of_datasource_nifids = []  # this is useful if we don't know the numbe
 map_of_datasource_nifids = {} # better to use a dict to map id -> index  XXX validate uniqueness
 
 def get_source_entity_nifids():
-    #TODO  WHERE DO THESE ACTUALLY COME FROM!??!!?!
     summary = get_summary_counts('*')
-    ids = []
-    names = []
+    ids = ['nlx_82958']
+    names = ['PubMed']
     #counts = []
     for id_, name, idx, count in summary[0]:
         if id_ not in ids:
@@ -783,27 +795,32 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
     return level_dict
 
 
-def graph_data(load_loc='/tmp/'):
+def graph_data(paths):
+    """ given a requisitely formatted dict in a pickle graph it """
     nifids, nif_names = get_source_entity_nifids()
     #terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse', 'species'
     #terms = 'neurotransmitter', 
     #terms = 'drug of abuse',
     #terms = 'species', #'neurotransmitter', 'drug of abuse'
     #terms = 'nervous system disease',
-    terms = 'auditory',
-    for term in terms:
-        with open(load_loc+term+'.pickle','rb') as f:
+    #terms = 'auditory',
+    #for term in terms:
+    for path in paths:
+        #with open(load_loc+term+'.pickle','rb') as f:
+        with open(path,'rb') as f:
             levels = pickle.load(f)
         disp_levels(levels, nifids, nif_names)
 
-def graph_partonomy(load_loc='/tmp/', terms=[], titles=None, flatten=False, figname='test'):
+def graph_partonomy(paths, titles=None, flatten=False, figname='test'):
     resource_ids, resource_names = get_source_entity_nifids()
     mats = []
     rns = []
-    for term in terms:
-        with open(load_loc+term+'.pickle','rb') as f:
+    #for term in terms:
+    for path in paths:
+        #with open(load_loc+term+'.pickle','rb') as f:
+        with open(path,'rb') as f:
             level_dict = pickle.load(f)
-        #term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
+        term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
 
         if flatten:
             if len(level_dict.keys()) > 1:  # 0 -> already flat
@@ -862,15 +879,23 @@ def make_legend():
     img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto', vmin=0, vmax=3)
     ax1.barh(0,1,.5,'')
 
-def run_auditory_terms():
-    out = get_term_file_counts('/tmp/auditory_terms','auditory')  # TODO pickup where left of if something breaks in long jobs
-    embed()
-
-
 def main():
+    if args['--term_file']:
+        path = args['--term_file']
+        dirname = os.path.dirname(path)
+        filename = os.path.basename(path)
+        out = get_term_file_counts(args['--term_file'], filename, dirname)
+        embed()
+    if args['--pickle_file']:
+        path = args['--pickle_file']
+        graph_partonomy((path,))
+        graph_data((path,))
+
+
     #run_auditory_terms()
-    aud_terms = 'auditory',
-    graph_partonomy(terms=aud_terms, figname='Auditory Terms')
+    #aud_terms = 'auditory',
+    #graph_partonomy(terms=aud_terms, figname='Auditory Terms')
+
     #graph_data() # FIXME
 
     #acquire_data()
