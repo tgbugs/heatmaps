@@ -1,14 +1,23 @@
+#!/usr/bin/env python3
 """
 Usage:
-    heatmaps.py [ --term_file=<file> --pickle_file=<file> ]
+    heatmaps.py [ --term-file=<file> --pickle-file=<file> --ipython --make-csv=<file> --ice ]
     heatmaps.py -h | --help
 Options:
-    -t --term_file=<file>       newline separate list of terms
-    -p --pickle_file=<file>
+    -t --term-file=<file>       newline separate list of terms
+    -p --pickle-file=<file>
+    -c --make-csv=<file>
+    -i --ipython
+    --ice                       make heatmaps as icecicles rather than trees
 """
 
 #TODO
+# move to its own project
 # convert to class based
+# break into two files?
+#   one that convertes data with the desired format to visualize or manipulate (the matrix is the heatmap)
+#   one that acquires that data and gets it into the desired format
+#   potentially one that deals with sorting and ordering the indicies (this is where applications to desc arrive)
 # inputs should take
 #   a list of terms
 #   a root term and a property relationship
@@ -18,6 +27,25 @@ Options:
 #
 #
 #
+# converting terms and data sources (and eventually anything) into a reliably indexed matrix
+# as long as we know the mapping from the ids to the reference table the order actually doesnt matter
+# in fact it may make life easier if we can just add new sources on to the end (eh)
+# the ids will be used to generate a REFERENCE matrix where ids are mapped to natural numbers 0-n
+# various orderings of the ids will be mapped to permutations of the original index
+# eg aijth term from the reference matrix will be placed in the bxyth position when a new ordering
+# maps i->x and j->y
+# aij i->rows j->columns as per convention, we will make the term ids the rows and the source (etc) ids the columns
+# this works nicely with the fact that each row has only a subset of the sources
+# WE NEED to have the FULL list of terms 
+# consideration: the list of terms probably changes more quickly than the list of sources, another argument for keeping
+# terms as rows since we will have to iterate over all terms when we index a new source anyway
+# XXX DERP just keep the bloody thing in dict form and use the orderings from there
+# all we need to know is how many total data sources there are and what index we want to use for each of them (ie we need to fill in the zeros)
+# XXX may still want this becasue if we want to reorder on data sources it is going to be a pain if we can't use slicing
+#
+# NOTES: normalize by the first appearance of the term in the literature to attempt to control for historical entrenchment
+# consider also normalizing by the total number of records per datasource??
+
 
 import os
 import pickle
@@ -31,10 +59,6 @@ import pylab as plt
 from docopt import docopt
 
 args = docopt(__doc__, version='heatmaps .0001')
-
-
-# NOTES: normalize by the first appearance of the term in the literature to attempt to control for historical entrenchment
-# consider also normalizing by the total number of records per datasource??
 
 #urls
 url_oq_con_term = "http://nif-services.neuinfo.org/ontoquest/concepts/term/"  #used in get_term_id
@@ -53,6 +77,10 @@ child_term_ids_subject_xpath = "//relationship[subject/@id='%s' and property/@id
 file_birnlex_796_rel = "~/Downloads/birnlex_796.xml"
 
 
+###
+#   Data acquisition, get and parse xml
+###
+
 def re_tree_der():
     """
         A rel/all dump with includeDerived=ture on brain flattens everything, the tree is still there, but we have to
@@ -65,11 +93,6 @@ def re_tree_der():
     c = xmlDoc.xpathNewContext()
     child_term_ids_xpath = "//relationship[subject/@id='%s' and property/@id='%s']/subject/@id"%('birnlex_768',)  # %s id %s relationship
     c.xpathEval(child_term_ids_xpath)
-
-
-class Summary:
-    "the summary xml"
-
 
 def get_xpath(doc, query):
     """ doc is a string that is an xml document
@@ -120,7 +143,6 @@ def get_rel_id(relationship):  #FIXME this is NOT consistently ordred! AND is_a 
     except IndexError:
         id_ = None
     return id_
-
 
 def get_term_id(term):
     """ Return the id for a term or None if an error occures """
@@ -253,7 +275,6 @@ def get_summary_counts(id_):
 
     #counts = get_xpath(response.text, term_id_xpath)
 
-
 def get_term_count_data(term, level, relationship, child_relationship, exclude_parents=False, term_id=None):
     """
         for a given term go get all its children at a given level and get the
@@ -277,33 +298,6 @@ def get_term_count_data(term, level, relationship, child_relationship, exclude_p
         child_data[child_id] = data
     return child_data, id_name_dict
 
-problem_ids = ['birnlex_1700', 'birnlex_1571', 'birnlex_1570','birnlex_1577',
-               'birnlex_1576','birnlex_1575','birnlex_1574','birnlex_1170',
-               'birnlex_1581','birnlex_1583','birnlex_1586',
-              ]  # report these, some seem to be redirects in neurolex and a number w/ PONS_brain_region
-                 # or regional part of the brain
-                 # fairley certain that the stuff that succeeds is cached and that I broke the service
-
-
-# converting terms and data sources (and eventually anything) into a reliably indexed matrix
-# as long as we know the mapping from the ids to the reference table the order actually doesnt matter
-# in fact it may make life easier if we can just add new sources on to the end (eh)
-# the ids will be used to generate a REFERENCE matrix where ids are mapped to natural numbers 0-n
-# various orderings of the ids will be mapped to permutations of the original index
-# eg aijth term from the reference matrix will be placed in the bxyth position when a new ordering
-# maps i->x and j->y
-# aij i->rows j->columns as per convention, we will make the term ids the rows and the source (etc) ids the columns
-# this works nicely with the fact that each row has only a subset of the sources
-# WE NEED to have the FULL list of terms 
-# consideration: the list of terms probably changes more quickly than the list of sources, another argument for keeping
-# terms as rows since we will have to iterate over all terms when we index a new source anyway
-# XXX DERP just keep the bloody thing in dict form and use the orderings from there
-# all we need to know is how many total data sources there are and what index we want to use for each of them (ie we need to fill in the zeros)
-# XXX may still want this becasue if we want to reorder on data sources it is going to be a pain if we can't use slicing
-
-full_list_of_datasource_nifids = []  # this is useful if we don't know the number of terms and haven't made a matrix, just a set of lists
-map_of_datasource_nifids = {} # better to use a dict to map id -> index  XXX validate uniqueness
-
 def get_source_entity_nifids():
     summary = get_summary_counts('*')
     ids = ['nlx_82958']
@@ -324,6 +318,10 @@ def get_source_entity_nifids():
     #names = list(np.array(names)[order])
     return ids, names
 
+###
+#   Data processing
+###
+
 def make_collapse_map(ids, names):
     """ use the data on source entities and collapse redundant entries """
 
@@ -339,8 +337,6 @@ def make_collapse_map(ids, names):
         ids_list.append(tuple(collapse[n]))
 
     return ids_list, unames
-
-    
 
 def construct_columns(data_dict, term_id_list, datasource_nifid_list, collapse_map=None):
     """
@@ -403,6 +399,10 @@ def compute_diversity(matrix):
     sources_per_term = np.sum(matrix > 0, axis=1) / total_data_sources
     print(sources_per_term)
     return sources_per_term
+
+###
+#   Data display
+###
 
 def display_grid(mats, rns, titles, col_names, figname, hspace=0):
     aspect = .3
@@ -472,8 +472,6 @@ def display_grid(mats, rns, titles, col_names, figname, hspace=0):
 
     title = figname 
     fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
-
-
 
 def display_heatmap(matrix, row_names, col_names, title):
     #blanks = np.zeros_like(matrix[0])
@@ -637,89 +635,29 @@ def display_div(div, names, levels, term, nterms=300):
 ###
 #   Acqusition
 ###
+def export_csv(path):  #TODO we are really going to need to rework the idea of a level dict
+    resource_ids, resource_names = get_source_entity_nifids()
+    with open(path, 'rb') as f:
+        level_dict = pickle.load(f)
 
-class BaseDatagetter:
-    """
-        Datagetter classes should implement all the methods needed to do 3 things
-        1) retrieve the raw data and put it in structured form
-        2) sort the raw data
-        3) collapse the raw data
-        This class will actually RETRIEVE the data and save it so that it can be opperated on later 
-        Often we will actually BUILD the collapse map or sort using only the raw data and thus
-        we will not need the functionality provided here.
-        NOTE: This class shall deal with REMOTE resources that CHANGE
-        NOTE: This class is what we will use to map DIVERSELY formatted data
-        into our common internal format, so make it good.
-        NOTE: one problem to consider is that this is going to assume that the "datum" indexed
-        is a scalar, but surely we can do better and make it work as long as the datatype is consistent
-        across all indecies (eg a bitmap, or a time series, or anything set of things that all produce valid
-        output from an arbitrary function f or set of functions)
+    try:
+        level_dict[1]
+        term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
+    except KeyError:
+        term = os.path.basename(path).split('.')[0]
+    for level, (data, idn_dict) in level_dict.items():
+        row_ids = list(data.keys())
+        collapse_map, unames = make_collapse_map(resource_ids, resource_names)
+        matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
 
-        NOTE: if you don't need an index and are just going to use 0...n then you probably can just use dg.get()
-    """
-    def __init__(self):
-        self.indicies = []
-        self.get()
+        csvs = ''
+        csvs += ',' + ','.join(unames) + '\n'
+        for row, id_ in zip(matrix, row_ids):
+            line = idn_dict[id_] + ',' + ','.join(str(i) for i in row) + '\n'
+            csvs += line
 
-    def get_indecies(self):
-        """ n should be number of the index. If not given auto? grrrr
-            or rather, this method should get ALL the indexes
-            This could read in from a text file or from the internet.
-            We reccomend defining the different functions as class methods
-            and then calling them from here.
-        """
-        raise NotImplemented
-        # RULE the objects returned by the function that queries index_one
-        # should themselves contain denormalized references named by objects in index_two
-        index = ['hello','i','am','a','valid','index']  # TODO uniqueness??
-        self.indicies.append(index)
-
-    def get_collapse_map(self):
-        """ If you are going to sum the quantitative values across fields and there
-            is an external source for mapping those fields
-        """
-        raise NotImplemented
-
-    def get_sort_map(self):
-        raise NotImplemented
-        
-    def get(self):
-        """ Replace this method to define how to retrieve the data"""
-        raise NotImplemented
-
-    def _make_metadata(self):
-        """ Store standard metadata such as date and time """
-        pass
-
-    def store(self):
-        """ Store the retrieved results somehwere for now, we pickle
-            Consider also sqlite or postgress
-        """
-        raise NotImplemented
-
-class XMLDatagetter(BaseDatagetter):
-    def __init__(self, timeout=8):
-        self.timeout = timeout 
-    def get_xml(self, url):
-        try:
-            self.resp = requests.get(url, timeout=self.timeout)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
-        except requests.exceptions.Timeout:
-            #TODO
-            pass
-        try:
-            self.xmlDoc = libxml2.parseDoc(resp.text)
-        except libxml2.parserError:  # derp 
-            #TODO
-            pass
-
-    def run_xpath(self, query):
-        self
-
-class NIFSummary(BaseDatagetter):
-    def __init__(self):
-        pass
-    def get(self):  #XXX I HAVE NO IDEA WHAT
-        pass
+        with open(os.path.dirname(path)+os.sep+term+' level %s.csv'%level, 'wt') as f:
+            f.write(csvs)
 
 def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
     term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
@@ -824,7 +762,7 @@ def graph_data(paths):
             levels = pickle.load(f)
         disp_levels(levels, nifids, nif_names)
 
-def graph_partonomy(paths, titles=None, flatten=False, figname='test'):
+def graph_partonomy(paths, titles=None, flatten=False, figname='test', ice=False):
     resource_ids, resource_names = get_source_entity_nifids()
     mats = []
     rns = []
@@ -856,7 +794,9 @@ def graph_partonomy(paths, titles=None, flatten=False, figname='test'):
             collapse_map, unames = make_collapse_map(resource_ids, resource_names)
             matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
             div = compute_diversity(matrix)
-            order = np.argsort(div)#[::-1]  # start high #NOPE trees better than ice
+            order = np.argsort(div)
+            if ice:
+                order = order[::-1]  # start high #NOPE trees better than ice
             discre = discretize(matrix[order])
             row_names = []
             for i in order:
@@ -892,17 +832,114 @@ def make_legend():
     img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto', vmin=0, vmax=3)
     ax1.barh(0,1,.5,'')
 
-def main():
+###
+#   Preliminary classifying, needs work... look at dipper for inspiration? or just write out the spec by hand
+###
 
-    if args['--term_file']:
-        path = args['--term_file']
+class BaseDatagetter:
+    """
+        Datagetter classes should implement all the methods needed to do 3 things
+        1) retrieve the raw data and put it in structured form
+        2) sort the raw data
+        3) collapse the raw data
+        This class will actually RETRIEVE the data and save it so that it can be opperated on later 
+        Often we will actually BUILD the collapse map or sort using only the raw data and thus
+        we will not need the functionality provided here.
+        NOTE: This class shall deal with REMOTE resources that CHANGE
+        NOTE: This class is what we will use to map DIVERSELY formatted data
+        into our common internal format, so make it good.
+        NOTE: one problem to consider is that this is going to assume that the "datum" indexed
+        is a scalar, but surely we can do better and make it work as long as the datatype is consistent
+        across all indecies (eg a bitmap, or a time series, or anything set of things that all produce valid
+        output from an arbitrary function f or set of functions)
+
+        NOTE: if you don't need an index and are just going to use 0...n then you probably can just use dg.get()
+    """
+    def __init__(self):
+        self.indicies = []
+        self.get()
+
+    def get_indecies(self):
+        """ n should be number of the index. If not given auto? grrrr
+            or rather, this method should get ALL the indexes
+            This could read in from a text file or from the internet.
+            We reccomend defining the different functions as class methods
+            and then calling them from here.
+        """
+        raise NotImplemented
+        # RULE the objects returned by the function that queries index_one
+        # should themselves contain denormalized references named by objects in index_two
+        index = ['hello','i','am','a','valid','index']  # TODO uniqueness??
+        self.indicies.append(index)
+
+    def get_collapse_map(self):
+        """ If you are going to sum the quantitative values across fields and there
+            is an external source for mapping those fields
+        """
+        raise NotImplemented
+
+    def get_sort_map(self):
+        raise NotImplemented
+        
+    def get(self):
+        """ Replace this method to define how to retrieve the data"""
+        raise NotImplemented
+
+    def _make_metadata(self):
+        """ Store standard metadata such as date and time """
+        pass
+
+    def store(self):
+        """ Store the retrieved results somehwere for now, we pickle
+            Consider also sqlite or postgress
+        """
+        raise NotImplemented
+
+class XMLDatagetter(BaseDatagetter):
+    def __init__(self, timeout=8):
+        self.timeout = timeout 
+    def get_xml(self, url):
+        try:
+            self.resp = requests.get(url, timeout=self.timeout)  # sometimes we need a longer timeout :/  FIXME :/ stateful?
+        except requests.exceptions.Timeout:
+            #TODO
+            pass
+        try:
+            self.xmlDoc = libxml2.parseDoc(resp.text)
+        except libxml2.parserError:  # derp 
+            #TODO
+            pass
+
+    def run_xpath(self, query):
+        self
+
+class NIFSummary(BaseDatagetter):
+    def __init__(self):
+        pass
+    def get(self):  #XXX I HAVE NO IDEA WHAT
+        pass
+
+
+
+###
+#   Main
+###
+
+def main():
+    if args['--ipython']:
+        embed()
+    if args['--make-csv']:
+        export_csv(args['--make-csv'])
+
+    if args['--term-file']:
+        path = args['--term-file']
         dirname = os.path.dirname(path)
         filename = os.path.basename(path)
-        out = get_term_file_counts(args['--term_file'], filename, dirname)
+        out = get_term_file_counts(args['--term-file'], filename, dirname)
         embed()
-    if args['--pickle_file']:
-        path = args['--pickle_file']
-        graph_partonomy((path,))  # FIXME output naming
+    if args['--pickle-file']:
+        path = args['--pickle-file']
+        graph_partonomy((path,),ice=args['--ice'])  # FIXME output naming
         graph_data((path,))  # FIXME output naming
 
 
