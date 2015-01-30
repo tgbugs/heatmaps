@@ -659,14 +659,16 @@ def export_csv(path):  #TODO we are really going to need to rework the idea of a
         with open(os.path.dirname(path)+os.sep+term+' level %s.csv'%level, 'wt') as f:
             f.write(csvs)
 
-def disp_levels(level_dict, resource_ids, resource_names):  # TODO consider idn dict here?
+def disp_levels(level_dict, resource_ids, resource_names, ice=False):  # TODO consider idn dict here?
     term = list(level_dict[0][1].values())[0]   # FIXME mmmm magic numbers
     for level, (data, idn_dict) in level_dict.items():
         row_ids = list(data.keys())
         collapse_map, unames = make_collapse_map(resource_ids, resource_names)
         matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
         div = compute_diversity(matrix)
-        order = np.argsort(div)#[::-1]  # start high # nope, trees better
+        order = np.argsort(div)
+        if ice:
+            order = order[::-1]  #convert from trees to icecicles
         discre = discretize(matrix[order])
         row_names = []
         for i in order:
@@ -746,7 +748,7 @@ def get_term_file_counts(term_file, name, save_loc='/tmp/'):
     return level_dict
 
 
-def graph_data(paths):
+def graph_data(paths, ice=False):
     """ given a requisitely formatted dict in a pickle graph it """
     nifids, nif_names = get_source_entity_nifids()
     #terms = 'hindbrain', 'midbrain', 'forebrain', 'neurotransmitter', 'drug of abuse', 'species'
@@ -760,9 +762,12 @@ def graph_data(paths):
         #with open(load_loc+term+'.pickle','rb') as f:
         with open(path,'rb') as f:
             levels = pickle.load(f)
-        disp_levels(levels, nifids, nif_names)
+        disp_levels(levels, nifids, nif_names, ice)
 
-def graph_partonomy(paths, titles=None, flatten=False, figname='test', ice=False):
+def graph_partonomy(paths, titles=None, flatten=False, figname='test'):
+    """
+        Compute the diversity and graph terms ranked and color by level
+    """
     resource_ids, resource_names = get_source_entity_nifids()
     mats = []
     rns = []
@@ -795,8 +800,8 @@ def graph_partonomy(paths, titles=None, flatten=False, figname='test', ice=False
             matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
             div = compute_diversity(matrix)
             order = np.argsort(div)
-            if ice:
-                order = order[::-1]  # start high #NOPE trees better than ice
+            #if ice:
+                #order = order[::-1]  # start high #NOPE trees better than ice
             discre = discretize(matrix[order])
             row_names = []
             for i in order:
@@ -821,7 +826,6 @@ def graph_partonomy(paths, titles=None, flatten=False, figname='test', ice=False
         hspace = 0
     else:
         hspace = .1
-    #embed()
     #display_grid(mats, rns, titles, unames, figname, hspace=hspace)
 
 def make_legend():
@@ -939,8 +943,8 @@ def main():
         embed()
     if args['--pickle-file']:
         path = args['--pickle-file']
-        graph_partonomy((path,),ice=args['--ice'])  # FIXME output naming
-        graph_data((path,))  # FIXME output naming
+        graph_partonomy((path,))  # FIXME output naming
+        graph_data((path,),ice=args['--ice'])  # FIXME output naming
 
 
     #run_auditory_terms()
