@@ -587,7 +587,7 @@ def display_div(div, names, levels, term, nterms=300):
     #ll, ul = ax1.get_ylim()
     #width = (ul - ll) / matrix.shape[0]
     #other = np.arange(ll, ul, width)[::-1]  # for whatever reason backwards, probably imshow idiocy
-    base = 5  #width
+    base = 8  #width
     height = nterms // 10 + 2
     dpi = 600
     #fakefig = plt.figure()
@@ -627,6 +627,7 @@ def display_div(div, names, levels, term, nterms=300):
     #plt.legend()
     fig.tight_layout()
 
+    term = 'Auditory term'
     plt.title(term.capitalize()+' frequencies. Top %s terms.'%nterms,loc='right')
 
     fig.savefig('/tmp/%s_div.png'%term, bbox_inches='tight', pad_inches=.1, dpi=dpi)
@@ -665,8 +666,17 @@ def disp_levels(level_dict, resource_ids, resource_names, ice=False):  # TODO co
         row_ids = list(data.keys())
         collapse_map, unames = make_collapse_map(resource_ids, resource_names)
         matrix = construct_columns(data, row_ids, resource_ids, collapse_map)
+
+        #sort by div score
         div = compute_diversity(matrix)
         order = np.argsort(div)
+
+        # sort by names
+        names = []
+        for id_ in row_ids:
+            names.append(idn_dict[id_].lower())
+        order = np.argsort(names)
+
         if ice:
             order = order[::-1]  #convert from trees to icecicles
         discre = discretize(matrix[order])
@@ -679,6 +689,7 @@ def disp_levels(level_dict, resource_ids, resource_names, ice=False):  # TODO co
 
         #out = compute_diversity(matrix)
         #display_heatmap(discre, row_names, resource_names, '%s level %s'%(term, level))
+        term = 'Auditory terms'
         display_heatmap(discre, row_names, unames, '%s level %s'%(term, level))
 
 def acquire_data(save_loc='/tmp/'):
@@ -817,7 +828,7 @@ def graph_partonomy(paths, titles=None, flatten=False, figname='test'):
             comp_levels.extend([level] * len(div))
 
 
-        display_div(comp_div, comp_names, comp_levels, term)
+        display_div(comp_div, comp_names, comp_levels, term, nterms=360)
     if titles == None:
         #titles = [None]*(len(mats) - 1) + ['Brain partonomy']
         #titles = [None]*(len(mats) - 1) + ['Diseases']
@@ -944,7 +955,7 @@ def main():
     if args['--pickle-file']:
         path = args['--pickle-file']
         graph_partonomy((path,))  # FIXME output naming
-        graph_data((path,),ice=args['--ice'])  # FIXME output naming
+        #graph_data((path,),ice=args['--ice'])  # FIXME output naming
 
 
     #run_auditory_terms()
