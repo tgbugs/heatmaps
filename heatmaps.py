@@ -622,7 +622,7 @@ def display_div(div, names, levels, term, nterms=300):
     ax2.yaxis.set_ticks_position('left')
     ax2.set_ylim(-.5, len(div)-.5)
     [l.set_fontsize(term_fsize) for l in ax2.yaxis.get_ticklabels()]
-    ax2.legend(loc='lower right',fontsize='small', frameon=False, borderpad=None)
+    #ax2.legend(loc='lower right',fontsize='small', frameon=False, borderpad=None)
     #fig.legend(hands, labs, loc=4)
     #plt.legend()
     fig.tight_layout()
@@ -955,7 +955,7 @@ def main():
     if args['--pickle-file']:
         path = args['--pickle-file']
         graph_partonomy((path,))  # FIXME output naming
-        #graph_data((path,),ice=args['--ice'])  # FIXME output naming
+        graph_data((path,),ice=args['--ice'])  # FIXME output naming
 
 
     #run_auditory_terms()
