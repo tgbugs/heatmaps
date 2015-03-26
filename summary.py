@@ -270,6 +270,55 @@ class ontology_service(rest_service):
 #   Stick the collected data in a datastore (postgres)
 ###
 
+#table 
+
+"""
+CREATE EXTENSION hstore;
+
+CREATE TABLE term_history(
+    "DateTime" timestamp without time zone,
+     
+)
+
+CREATE TABLE term_hstores(
+    term text,
+    src_counts hstore,
+)
+
+
+CREATE TABLE view_history(
+    id integer NOT NULL,
+    source_id_order text[],
+    CONSTRAINT view_history_pkey PRIMARY KEY (id)
+)
+
+CREATE TABLE view_data(
+    version_id text,
+    column_ids interger NOT NULL,
+    term_counts hstore,
+    CONSTRAINT view_data_id_fkey FOREIGN KEY (column_ids)
+        REFERENCES view_history (id) MATCH SIMPLE
+        ON UPDATE NO ACTION ON DELETE NO ACTION,
+)
+
+INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
+1,
+'{"a", "b", "c"}',
+'brain => "[1 2 3 4]"'
+);
+
+SELECT * FROM view_sources LEFT OUTER JOIN source_entity ON REPLACE(view_sources.src_nif_id,'_','-')=source_entity.nif_id;
+
+SELECT nif_id FROM relation_entity WHERE is_view=TRUE;
+"""
+
+class database_service:
+    dbname = "cm"
+    user = "cm"
+    host = "postgres-stage@neuinfo.org"
+    port = 5432
+    def __init__(self):
+        pass
 
 ###
 #   main
