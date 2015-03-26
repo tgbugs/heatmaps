@@ -5,16 +5,18 @@
     2) maintains records for common terms (cache)
     3) manages the provenance for specific heatmaps that have been saved
     4) maintains collapse maps??? or should this happen independently?
+    5) calls into the ontology to traverse the graph
 
 """
 
 import psycopg2
-import requests  #XXX switching to json because requests autodecodes to dict :D
+import requests
+import libxml2
 
 from IPython import embed
 
 #SHOULD PROV also be handled here?
-#SHOULD odering of rows and columns go here?
+#SHOULD odering of rows and columns go here? NO
 
 ### THINGS THAT GO ELSEWHERE
 # SCIGRAPH EXPANSION DOES NOT GO HERE
@@ -30,10 +32,11 @@ from IPython import embed
 #the dict should probably be versioned and only track deltas so that we do not have to duplicate rows
 
 ###
-#   Base urls that may change
+#   Base urls that may change, and identifiers that need to be defined early
 ###
 
 SCIGRAPH = "http://matrix.neuinfo.org:9000"
+LITERATURE_ID = 'nlx_82958'  #FIXME pls no hardcode this (is a lie too)
 
 ###
 #   The index/dict that maps columns to ids
@@ -104,10 +107,12 @@ class rest_service:
     """
     _timeout = 1
     _cache_xml = 0  #FIXME we may want to make this toggle w/o having to restart all the things
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
+        """ here for now to all hardcoded cache stuff """
         if cls._cache_xml:
             cls._xml_cache = {}
-        return cls
+        instance = super().__new__(cls)
+        return instance
 
     def get_xml(self, url):
         """ returns the raw xml for parsining """
@@ -116,6 +121,7 @@ class rest_service:
             self._xml_cache[url] = response.text
 
         if response.ok:
+            
             return response.text
         else:
             raise IOError("Get failed %s %s"%(reaponse.status_code, response.reason))
@@ -129,9 +135,7 @@ class rest_service:
             raise IOError("Get failed %s %s"%(reaponse.status_code, response.reason))
 
 
-
-
-    def xpath(self, xml, queries*):
+    def xpath(self, xml, *queries):
         """
             run a set of xpath queries
             TODO: consider switching lxml for libxml2?
@@ -147,50 +151,124 @@ class rest_service:
         if len(results) == 1:
             return results[0]
         else:
-            return result
-
-
-
-
+            return tuple(results)
 
 
 ###
 #   Retrieve summary per term
 ###
 
-# 1) DEDUPLICATE RECORDS WHY!? WHY!?
-
-class summary_service(rest_service):  #implement as a service/coro? with asyncio?
-    url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q="
+class summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
+    url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
+    _timeout = 10
 
     def __init__(self, term_server):  # FIXME this feels wrong :/
         self.term_server = term_server
+
+    def get_sources(self):
+        """
+            get the complete list of data sources
+            the structure for each nifid is as follows:
+
+            (database name, indexable, total results)
+        """
+        query_url = self.url % '*'
+        xml = self.get_xml(query_url)
+        nodes, lit = self.xpath(xml, '//results/result', '//literatureSummary/@resultCount')
+        resource_data_dict = {}
+
+        # tuple order: db, indexable, total count ... NOTE db is the name
+        resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature', int(lit[0].content))
+
+        for node in nodes:
+            if node.prop('nifId') not in resource_data_dict:  # cull dupes
+                nifId = node.prop('nifId')
+                db = node.prop('db')
+                indexable = node.prop('indexable')
+                putative_count = node.xpathEval('./count')
+                if len(putative_count) > 1:
+                    print(term_id, name, [c.content for c in putative_count])
+                    raise IndexError('too many counts!')
+                count = int(putative_count[0].content)
+                resource_data_dict[nifId] = db, indexable, count
+
+        return resource_data_dict
+        
+
+
     
     def get_counts(self, term):
+        """
+            given a term return the summary counts for each unique nifid
+            full descriptions for each nifid do not duplicated here
+            store once for all the records when we get that data
+        """
+
         term_id = self.term_server.get_id(term)
 
+        if term_id:  # get_id returns None if > 1 id
+            query_url = self.url % term_id
+        else:  # let the summary service sort out the id mess
+            query_url = self.url % term
 
+        xml = self.get_xml(query_url)
+        nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
+                                      '//literatureSummary/@resultCount')
+
+        #TODO deal with names and empty nodes
+        name = name[0].content
+        if name != term:
+            raise TypeError('for some reason name != term: %s != %s'%(name, term))
+
+        nifid_count = {}
+
+        #datasources
+        for node in nodes:
+            if node.prop('nifId') not in nifid_count:  # cull dupes
+                nifId = node.prop('nifId')
+                putative_count = node.xpathEval('./count')
+                if len(putative_count) > 1:
+                    print(term_id, name, [c.content for c in putative_count])
+                    raise IndexError('too many counts!')
+                count = int(putative_count[0].content)
+                nifid_count[nifId] = count
+        
+        #literature
+        nifid_count[LITERATURE_ID] = int(lit[0].content)
+
+        return nifid_count
 
 
 
 ###
 #   Map terms to ids  FIXME we need some way to resolve multiple mappings to ids ;_;
 ###
+
 class term_service(rest_service):
-    """ let us try this with json """
+    """ let us try this with json: result--works pretty well """
     url = SCIGRAPH + "/scigraph/vocabulary/term/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"  #FIXME curie seems borken?
+    _timeout = 1
 
     def get_id(self, term):
         query_url = self.url % term
         records = self.get_json(query_url)['concepts']
-        identifiers = [record['fragment'] for record in records if not record['deprecated']]
-        return identifiers[0]  #FIXME this is a stupid way to resolve the problem of multiple ids
+        if len(records) == 1:
+            return records[0]['fragment']
+        else:
+            return None
 
+###
+#   Ontology services
+###
+
+class ontology_service(rest_service):
+    url = None # XXX FIXME neighbors is currently broken :( :( :(
+    def get_terms(self, term):
+        return None
 
 ###
 #   Stick the collected data in a datastore (postgres)
 ###
-
 
 
 ###
@@ -198,8 +276,11 @@ class term_service(rest_service):
 ###
 
 def main():
-    rs = rest_service()
+    ts = term_service()
+    ss = summary_service(ts)
     embed()
+
+
 
 if __name__ == '__main__':
     main()
