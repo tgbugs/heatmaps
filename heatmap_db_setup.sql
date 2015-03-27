@@ -41,11 +41,13 @@ CREATE TABLE term_history(
         ON UPDATE NO ACTION ON DELETE NO ACTION
 );
 
+/* We don't need this table :)
 CREATE TABLE term_hstores(
     term text,
     src_counts hstore,
     CONSTRAINT term_hstores_pkey PRIMARY KEY (term)
 );
+*/
 
 /*  I almost think that we don't need this since we are just going to hold all
 the data in memory anyway and can repopulate from  * if needed, mappings from
@@ -60,4 +62,4 @@ CREATE TABLE summary_view_entity(
 
 ALTER TABLE heatmap_prov OWNER TO heatmapuser;
 ALTER TABLE term_history OWNER TO heatmapuser;
-ALTER TABLE term_hstores OWNER TO heatmapuser;
+--ALTER TABLE term_hstores OWNER TO heatmapuser;

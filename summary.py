@@ -17,9 +17,22 @@ import numpy as np
 
 from IPython import embed
 
+"""
+INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
+1,
+'{"a", "b", "c"}',
+'brain => "[1 2 3 4]"'
+);
+
+SELECT * FROM view_sources LEFT OUTER JOIN source_entity ON REPLACE(view_sources.src_nif_id,'_','-')=source_entity.nif_id;
+
+SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for this
+"""
+
+
 #SHOULD PROV also be handled here?
 #SHOULD odering of rows and columns go here? NO
-# TODO probably need to make this work via cgi?
+# TODO probably need to make this work via cgi? (probably not cgi)
 
 ### THINGS THAT GO ELSEWHERE
 # SCIGRAPH EXPANSION DOES NOT GO HERE  #FIXME but maybe running/handling the transitive closure does?
@@ -168,14 +181,16 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 
     def __init__(self, term_server):  # FIXME this feels wrong :/
         self.term_server = term_server
-        self.resources = self._get_sources()  # TODO invalidate when keys or counts mismatch with a * query (beautiful)
 
-    def _get_sources(self):
+    def get_sources(self):
         """
             get the complete list of data sources
             the structure for each nifid is as follows:
 
-            (database name, indexable, total results)
+            (database name, indexable)
+            a dict of nifid_count_total is also returned matching the format
+            of other nifid_count dictionaires, this one is considered to be
+            the "difninitive" record of the number of sources
 
             check results against cm, but be aware that 
         """
@@ -183,9 +198,11 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         xml = self.get_xml(query_url)
         nodes, lit = self.xpath(xml, '//results/result', '//literatureSummary/@resultCount')
         resource_data_dict = {}
+        nifid_count_total = {}
 
         # tuple order: db, indexable, total count ... NOTE db is the name
-        resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature', int(lit[0].content))
+        resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature')
+        nifid_count_total[LITERATURE_ID] = int(lit[0].content)
 
         for node in nodes:
             if node.prop('nifId') not in resource_data_dict:  # cull dupes
@@ -197,17 +214,12 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
                     print(term_id, name, [c.content for c in putative_count])
                     raise IndexError('too many counts!')
                 count = int(putative_count[0].content)
-                resource_data_dict[nifId] = db, indexable, count
+                resource_data_dict[nifId] = db, indexable
+                nifid_count[nifId] = count
 
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
-        return resource_data_dict
+        return resource_data_dict, nifid_count_total
 
-    def check_counts(self):
-        """ validate that we have the latest, if we do great
-            otherwise flag all existing hstore cache values as dirty
-        """
-        # XXX remind me again why we are sticking the non-proved stuff in a table?
-        # shouldn't it just sit in python memory and be served out here?
 
         
     def get_counts(self, term):
@@ -217,7 +229,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
             store once for all the records when we get that data
         """
 
-        if term != "*":
+        if term != "*":  # FIXME we should never be calling this?
             term_id = self.term_server.get_id(term)
 
             if term_id:  # get_id returns None if > 1 id
@@ -299,19 +311,6 @@ class ontology_service(rest_service):
 ###
 
 #table 
-
-"""
-INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
-1,
-'{"a", "b", "c"}',
-'brain => "[1 2 3 4]"'
-);
-
-SELECT * FROM view_sources LEFT OUTER JOIN source_entity ON REPLACE(view_sources.src_nif_id,'_','-')=source_entity.nif_id;
-
-SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for this
-"""
-
 class database_service:  # FIXME reimplement with asyncio?
     """ This should sort of be the central hub for fielding io for the database
         it should work for caching for the phenogrid output and for csv output
@@ -335,9 +334,32 @@ class database_service:  # FIXME reimplement with asyncio?
 
 class heatmap_service(database_service):
 
-    def __init__(self):
-        self.term_count_dict = {}
-        self.term_dirty = {}
+    def __init__(self, summary_server):
+        self.summary_server = summary_server
+        self.term_count_dict = {TOTAL_TERM:{}}  # makes init play nice
+        self.resources = None
+        self.check_counts()
+        output_map = {
+            'json':self.output_json,
+            'csv':self.output_csv,
+                     }
+
+    def check_counts(self):
+        """ validate that we have the latest, if we do great
+            otherwise flag all existing terms as dirty
+        """
+        resources, nifid_count_total = self.summary_server.get_sources()
+        if len(nifid_count_total) != len(self.term_count_dict[TOTAL_TERM]):
+            # the total number of sources has changed!
+            self.resources = resources
+            self.term_count_dict = {}  # reset the cache since new source
+            self.term_count_dict[TOTAL_TERM] = nifid_count_total
+        else:  # check for changes in values
+            for nifid, old_value, in self.term_count_dict[TOTAL_TERM]:
+                if nifid_count_total[nifid] != old_value:
+                    self.term_count_dict = {}
+                    self.term_count_dict[TOTAL_TERM] = nifid_count_total
+                    break  # we already found a difference
 
     def get_heatmap_data_from_doi(self, doi):
         sql = "SELECT th.term, th.term_hstore FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
@@ -345,7 +367,7 @@ class heatmap_service(database_service):
         hm_data = {term:hstore for term, hstore in tuples}
         return hm_data
 
-    def get_heatmap_from_doi(self, doi, term_id_order=None, src_id_order=None):
+    def get_heatmap_from_doi(self, doi, term_id_order=None, src_id_order=None, output='json'):
         """ return default (alpha) ordereded heatmap or apply input orders
         """
         hm_data = self.get_heatmap_data_from_doi(doi)
@@ -360,43 +382,31 @@ class heatmap_service(database_service):
             this is also where we will check to see if everything is up to date
         """
         #call to * to validate counts
-        self.summary_server.check_counts()
-        #
+        self.check_counts()
 
     def get_term_counts(self, *terms):
-        """ given a collection of terms retunrs a dict of dicts of their counts
+        """ given a collection of terms returns a dict of dicts of their counts
         """
+        # TODO do we want to deal with id/term overlap? (NO)
         terms = tuple(set([TOTAL_TERM].extend(terms)))  #removes dupes
-        sql = "SELECT src_counts FROM term_hstores WHERE term IN %s"
-        term_hstores = self.cursor_exec(sql, (terms,))
         term_count_dict = {}
-        for term, hstore in zip(terms,term_hstores):
-            if not hstore:
-                hstore = self.summary_server.get_counts(term)
-                self.add_hstore(term, hstore)
+        for term in terms:
+            try:
+                nifid_count = self.term_count_dict[term]
+            except KeyError:
+                nifid_count = self.summary_server.get_counts(term)
+                self.term_count_dict[term] = nifid_count
 
-            self.term_count_dict[term] = hstore
-
+            term_count_dict[term] = nifid_count
         return term_count_dict
 
-    def add_counts(self, term, term_count_dict):
-
-
-    def add_hstore(self, term, hstore):
-        sql = "INSERT INTO term_hstores (term, src_counts) VALUES(%s, %s)"
-        args = (term, hstore)
-        self.cursor_exec(sql, args)
-
-    def update_hstore(self, term, hstore):
-        """ this is a giant pile of poop """
-        sql = "DELETE FROM term_hstores WHERE term=%s"  # FIXME
-        args = (term,)
-        self.cursor_exec(sql, args)
-        self.add_hstore(term, hstore)
-
-    def output_csv(self, heatmap):
+    def output_csv(self, heatmap_data, term_id_order, src_id_order):
         """ consturct a csv file on the fly for download """
+        #this needs access id->name mappings
+        #pretty sure I already have this written?
 
+    def output_json(self, heatmap_data):
+        """ return a json object with the raw data and the src_id and term_id mappings """
 
 ###
 #   utility functions  FIXME these should probably go elsewhere?
@@ -415,7 +425,6 @@ def apply_order(dict_, key_order):
             ordered.append(None)
     return  ordered
                         
-
 def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
     """ given heatmap data, and orders on sources and terms
         return a matrix representation
@@ -431,6 +440,10 @@ def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
     matrix = np.empty(len(term_ids_order), len(src_ids_order))
     for i, term in enumerate(term_ids_order):
         matrix[i,:] = apply_order(hm_data[term], src_ids_order)
+
+
+
+
 
 
 ###
