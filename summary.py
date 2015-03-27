@@ -19,7 +19,7 @@ from IPython import embed
 #SHOULD odering of rows and columns go here? NO
 
 ### THINGS THAT GO ELSEWHERE
-# SCIGRAPH EXPANSION DOES NOT GO HERE
+# SCIGRAPH EXPANSION DOES NOT GO HERE  #FIXME but maybe running/handling the transitive closure does?
 # REST API DOES NOT GO HERE
 
 
@@ -36,7 +36,8 @@ from IPython import embed
 ###
 
 SCIGRAPH = "http://matrix.neuinfo.org:9000"
-LITERATURE_ID = 'nlx_82958'  #FIXME pls no hardcode this (is a lie too)
+LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
+TOTAL_TERM = 'federation_totals'  # FIXME we need to come up with a name for this though because * is reserved in sql
 
 ###
 #   The index/dict that maps columns to ids
@@ -124,7 +125,7 @@ class rest_service:
             
             return response.text
         else:
-            raise IOError("Get failed %s %s"%(reaponse.status_code, response.reason))
+            raise IOError("Get failed %s %s"%(response.status_code, response.reason))
 
     def get_json(self, url):  #FIXME we should be able to be smart about this
         """ returns a dict/list combo structure for the json """
@@ -132,7 +133,7 @@ class rest_service:
         if response.ok:
             return response.json()
         else:
-            raise IOError("Get failed %s %s"%(reaponse.status_code, response.reason))
+            raise IOError("Get failed %s %s"%(response.status_code, response.reason))
 
 
     def xpath(self, xml, *queries):
@@ -164,13 +165,16 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 
     def __init__(self, term_server):  # FIXME this feels wrong :/
         self.term_server = term_server
+        self.resources = self._get_sources()  # TODO invalidate when keys or counts mismatch with a * query (beautiful)
 
-    def get_sources(self):
+    def _get_sources(self):
         """
             get the complete list of data sources
             the structure for each nifid is as follows:
 
             (database name, indexable, total results)
+
+            check results against cm, but be aware that 
         """
         query_url = self.url % '*'
         xml = self.get_xml(query_url)
@@ -192,11 +196,9 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
                 count = int(putative_count[0].content)
                 resource_data_dict[nifId] = db, indexable, count
 
+        # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict
         
-
-
-    
     def get_counts(self, term):
         """
             given a term return the summary counts for each unique nifid
@@ -204,12 +206,15 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
             store once for all the records when we get that data
         """
 
-        term_id = self.term_server.get_id(term)
+        if term != "*":
+            term_id = self.term_server.get_id(term)
 
-        if term_id:  # get_id returns None if > 1 id
-            query_url = self.url % term_id
-        else:  # let the summary service sort out the id mess
-            query_url = self.url % term
+            if term_id:  # get_id returns None if > 1 id
+                query_url = self.url % term_id
+            else:  # let the summary service sort out the id mess
+                query_url = self.url % term
+        else:
+            query_url = self.url % term  #FIXME ICK
 
         xml = self.get_xml(query_url)
         nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
@@ -246,7 +251,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 
 class term_service(rest_service):
     """ let us try this with json: result--works pretty well """
-    url = SCIGRAPH + "/scigraph/vocabulary/term/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"  #FIXME curie seems borken?
+    url = SCIGRAPH + "/scigraph/vocabulary/term/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
     _timeout = 1
 
     def get_id(self, term):
@@ -262,9 +267,20 @@ class term_service(rest_service):
 ###
 
 class ontology_service(rest_service):
-    url = None # XXX FIXME neighbors is currently broken :( :( :(
-    def get_terms(self, term):
-        return None
+    url = SCIGRAPH + "/scigraph/graph/neighbors/%s.json?depth=10&blankNodes=false&relationshipType=%s&direction=in"
+    _timeout = 10
+    def get_terms(self, term_id, relationship):
+        query_url = self.url % (term_id, relationship)
+        records = self.get_json(query_url)
+        names = []
+        for rec in records['edges']:
+            if term_id in rec.values():
+                for node in records['nodes']:
+                    if node['id'] == rec['sub']:
+                        names.append(node['lbl'])
+
+        #FIXME the test on part of produces utter madness, tree is not clean
+        return records, names
 
 ###
 #   Stick the collected data in a datastore (postgres)
@@ -273,40 +289,6 @@ class ontology_service(rest_service):
 #table 
 
 """
-CREATE EXTENSION hstore;
-
-CREATE TABLE heatmap_history(
-    id integer,
-    doi text,
-    DateTime 
-)
-
-CREATE TABLE term_history(
-    "DateTime" timestamp without time zone,
-     
-)
-
-CREATE TABLE term_hstores(
-    term text,
-    src_counts hstore,
-)
-
-
-CREATE TABLE view_history(
-    id integer NOT NULL,
-    source_id_order text[],
-    CONSTRAINT view_history_pkey PRIMARY KEY (id)
-)
-
-CREATE TABLE view_data(
-    version_id text,
-    column_ids interger NOT NULL,
-    term_counts hstore,
-    CONSTRAINT view_data_id_fkey FOREIGN KEY (column_ids)
-        REFERENCES view_history (id) MATCH SIMPLE
-        ON UPDATE NO ACTION ON DELETE NO ACTION,
-)
-
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
 1,
 '{"a", "b", "c"}',
@@ -315,16 +297,50 @@ INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
 
 SELECT * FROM view_sources LEFT OUTER JOIN source_entity ON REPLACE(view_sources.src_nif_id,'_','-')=source_entity.nif_id;
 
-SELECT nif_id FROM relation_entity WHERE is_view=TRUE;
+SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for this
 """
 
-class database_service:
-    dbname = "cm"
-    user = "cm"
-    host = "postgres-stage@neuinfo.org"
+class database_service:  # FIXME reimplement with asyncio?
+    """ This should sort of be the central hub for fielding io for the database
+        it should work for caching for the phenogrid output and for csv output
+    """
+    dbname = "heatmap"
+    user = "heatmapuser"
+    host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
-    def __init__(self):
-        pass
+    def __enter__(self):
+        self.conn = pg.connect(dbname=self.dbname, user=self.user, host=self.host, port=self.port)
+    def __exit__(self):
+        self.conn.close()
+
+    def cursor_exec(self, SQL, args):
+        cur = self.conn.cursor()
+        cur.execute(SQL, args)
+        tups = cur.fetchall()
+        cur.close()
+        return tups
+
+
+class heatmap_service(database_service):
+    def get_heatmap_from_doi(self, doi):
+        sql = "SELECT th.term, th.term_hstore FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
+        wut = self.cursor_exec(sql, (doi,))
+        heatmap = None  # TODO
+        return heatmap
+
+    def get_term_counts(self, *terms):
+        sql = "SELECT src_counts FROM term_hstores WHERE term IN %s"
+        wut = self.cursor_exec(sql, (terms,))
+        if not wut:
+            pass
+            # go get the data from services
+            # ship it, and send it to the database term_hstores.src_counts
+
+
+
+    def output_csv(self, heatmap):
+        """ output a csv to a heatmap """
+        return heatmap
 
 ###
 #   main
@@ -333,7 +349,10 @@ class database_service:
 def main():
     ts = term_service()
     ss = summary_service(ts)
-    test_url = "http://matrix.neuinfo.org:9000/scigraph/graph/neighbors/UBERON_0000955.json?depth=10&blankNodes=false&relationshipType=BFO_0000050&direction=both"
+    os = ontology_service()
+    t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
+    r = "BFO_0000050"
+    j = os.get_terms(t, r)
     embed()
 
 
