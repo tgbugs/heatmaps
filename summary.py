@@ -198,6 +198,14 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict
+
+    def check_counts(self):
+        """ validate that we have the latest, if we do great
+            otherwise flag all existing hstore cache values as dirty
+        """
+        # XXX remind me again why we are sticking the non-proved stuff in a table?
+        # shouldn't it just sit in python memory and be served out here?
+
         
     def get_counts(self, term):
         """
@@ -242,6 +250,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         nifid_count[LITERATURE_ID] = int(lit[0].content)
 
         return nifid_count
+
 
 
 
@@ -324,19 +333,45 @@ class database_service:  # FIXME reimplement with asyncio?
 class heatmap_service(database_service):
     def get_heatmap_from_doi(self, doi):
         sql = "SELECT th.term, th.term_hstore FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
-        wut = self.cursor_exec(sql, (doi,))
-        heatmap = None  # TODO
+        tuples = self.cursor_exec(sql, (doi,))
+        heatmap = {term:hstore for term, hstore in tuples}
         return heatmap
 
+    def make_heatmap(self, *terms):
+        """ this call mints a heatmap and creates the prov record
+            this is also where we will check to see if everything is up to date
+        """
+        #call to * to validate counts
+        self.summary_server.check_counts()
+
+
     def get_term_counts(self, *terms):
+        """ given a collection of terms retunrs a dict of dicts of their counts
+        """
+        terms = tuple(set([TOTAL_TERM].extend(terms)))  #removes dupes
         sql = "SELECT src_counts FROM term_hstores WHERE term IN %s"
-        wut = self.cursor_exec(sql, (terms,))
-        if not wut:
-            pass
-            # go get the data from services
-            # ship it, and send it to the database term_hstores.src_counts
+        term_hstores = self.cursor_exec(sql, (terms,))
+        term_count_dict = {}
+        for term, hstore in zip(terms,term_hstores):
+            if not hstore:
+                hstore = self.summary_server.get_counts(term)
+                self.add_hstore(term, hstore)
 
+            term_count_dict[term] = hstore
 
+        return term_count_dict
+
+    def add_hstore(self, term, hstore):
+        sql = "INSERT INTO term_hstores (term, src_counts) VALUES(%s, %s)"
+        args = (term, hstore)
+        self.cursor_exec(sql, args)
+
+    def update_hstore(self, term, hstore):
+        """ this is a giant pile of poop """
+        sql = "DELETE FROM term_hstores WHERE term=%s"  # FIXME
+        args = (term,)
+        self.cursor_exec(sql, args)
+        self.add_hstore(term, hstore)
 
     def output_csv(self, heatmap):
         """ output a csv to a heatmap """

@@ -2,6 +2,8 @@
 CREATE ROLE heatmapuser LOGIN
     NOSUPERUSER INHERIT NOCREATEDB NOCREATEROLE;
 
+ALTER USER heatmapuser SET search_path = heatmap;
+
 --create the db
 CREATE DATABASE heatmap_test
     WITH OWNER = heatmapuser
@@ -41,7 +43,8 @@ CREATE TABLE term_history(
 
 CREATE TABLE term_hstores(
     term text,
-    src_counts hstore
+    src_counts hstore,
+    CONSTRAINT term_hstores_pkey PRIMARY KEY (term)
 );
 
 /*  I almost think that we don't need this since we are just going to hold all
