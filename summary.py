@@ -13,10 +13,13 @@ import psycopg2
 import requests
 import libxml2
 
+import numpy as np
+
 from IPython import embed
 
 #SHOULD PROV also be handled here?
 #SHOULD odering of rows and columns go here? NO
+# TODO probably need to make this work via cgi?
 
 ### THINGS THAT GO ELSEWHERE
 # SCIGRAPH EXPANSION DOES NOT GO HERE  #FIXME but maybe running/handling the transitive closure does?
@@ -331,19 +334,34 @@ class database_service:  # FIXME reimplement with asyncio?
 
 
 class heatmap_service(database_service):
-    def get_heatmap_from_doi(self, doi):
+
+    def __init__(self):
+        self.term_count_dict = {}
+        self.term_dirty = {}
+
+    def get_heatmap_data_from_doi(self, doi):
         sql = "SELECT th.term, th.term_hstore FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
         tuples = self.cursor_exec(sql, (doi,))
-        heatmap = {term:hstore for term, hstore in tuples}
-        return heatmap
+        hm_data = {term:hstore for term, hstore in tuples}
+        return hm_data
 
-    def make_heatmap(self, *terms):
+    def get_heatmap_from_doi(self, doi, term_id_order=None, src_id_order=None):
+        """ return default (alpha) ordereded heatmap or apply input orders
+        """
+        hm_data = self.get_heatmap_data_from_doi(doi)
+        if not term_id_order:
+            term_id_order = sorted(hm_data) 
+        if not src_id_order:
+            term_id_order = sorted(hm_data[TOTAL_TERM])
+        heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order)
+
+    def make_heatmap_data(self, *terms):
         """ this call mints a heatmap and creates the prov record
             this is also where we will check to see if everything is up to date
         """
         #call to * to validate counts
         self.summary_server.check_counts()
-
+        #
 
     def get_term_counts(self, *terms):
         """ given a collection of terms retunrs a dict of dicts of their counts
@@ -357,9 +375,12 @@ class heatmap_service(database_service):
                 hstore = self.summary_server.get_counts(term)
                 self.add_hstore(term, hstore)
 
-            term_count_dict[term] = hstore
+            self.term_count_dict[term] = hstore
 
         return term_count_dict
+
+    def add_counts(self, term, term_count_dict):
+
 
     def add_hstore(self, term, hstore):
         sql = "INSERT INTO term_hstores (term, src_counts) VALUES(%s, %s)"
@@ -374,8 +395,43 @@ class heatmap_service(database_service):
         self.add_hstore(term, hstore)
 
     def output_csv(self, heatmap):
-        """ output a csv to a heatmap """
-        return heatmap
+        """ consturct a csv file on the fly for download """
+
+
+###
+#   utility functions  FIXME these should probably go elsewhere?
+###
+
+def apply_order(dict_, key_order):
+    """ applys an order to values of a dict based on an ordering of the keys
+        if the dict to be ordered is missing a key that is in the order then
+        a value of None is inserted in that position of the output list
+    """
+    ordered = []
+    for key in key_order:
+        try:
+            ordered.append(dict_[key])
+        except KeyError:
+            ordered.append(None)
+    return  ordered
+                        
+
+def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
+    """ given heatmap data, and orders on sources and terms
+        return a matrix representation
+    """
+    #sanity check
+    if len(tdict_sdict) < len(term_ids_order):  # term_ids can be a subset!
+        # note that we *could* allow empty terms in the dict but that should
+        # be handled elsewhere
+        raise IndexError("Term orders must be subsets of the dict!")
+    if len(tdict_sdict[TOTAL_TERM]) != len(src_ids_order):  # these must match
+        raise IndexError("Source orders must match the total source counts!")
+
+    matrix = np.empty(len(term_ids_order), len(src_ids_order))
+    for i, term in enumerate(term_ids_order):
+        matrix[i,:] = apply_order(hm_data[term], src_ids_order)
+
 
 ###
 #   main
