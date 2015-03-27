@@ -275,6 +275,12 @@ class ontology_service(rest_service):
 """
 CREATE EXTENSION hstore;
 
+CREATE TABLE heatmap_history(
+    id integer,
+    doi text,
+    DateTime 
+)
+
 CREATE TABLE term_history(
     "DateTime" timestamp without time zone,
      
@@ -327,6 +333,7 @@ class database_service:
 def main():
     ts = term_service()
     ss = summary_service(ts)
+    test_url = "http://matrix.neuinfo.org:9000/scigraph/graph/neighbors/UBERON_0000955.json?depth=10&blankNodes=false&relationshipType=BFO_0000050&direction=both"
     embed()
 
 
