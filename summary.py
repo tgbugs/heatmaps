@@ -12,6 +12,7 @@
 import requests
 import libxml2
 import psycopg2 as pg
+from psycopg2.extras import register_hstore
 
 import numpy as np
 
@@ -48,73 +49,13 @@ SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for
 #the dict should probably be versioned and only track deltas so that we do not have to duplicate rows
 
 ###
-#   Base urls that may change, and identifiers that need to be defined early
+#   urls that may change, and identifiers that need to be defined globally
 ###
 
 SCIGRAPH = "http://matrix.neuinfo.org:9000"
 LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
 TOTAL_TERM = 'federation_totals'  # FIXME we need to come up with a name for this though because * is reserved in sql
 TOTAL_TERM_NAME = 'Totals'
-
-###
-#   The index/dict that maps columns to ids
-###
-
-'''
-class datasource_index:
-    """
-        columns are only added, never removed
-        they day this becomes a problem we will deal with it
-        this is important for being able to say "this database did not exist back then"
-    """
-    def __init__(self):
-        self.keys_ = []  #use a list to perserve order?
-        self.dict_ = {}  #FIXME populate
-    def __getitem__(self, key):
-        return self.dict_[key]
-    def __setitem__(self, key, value):
-        if key not in self.dict_:
-        else:
-            self.dict_[key] = value
-    def get(self, key):
-        return self.__
-'''
-
-class _datasource_index:
-    """
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHH
-        THIS IS INSANE
-    """
-    dbname = "cm"
-    user = "cm"
-    host = "postgres-stage@neuinfo.org"
-    port = 5432
-    sql = "select distinct view_nif_id from view_sources order by view_nif_id;"
-    def __init__(self):
-        conn = pg.connect(dbname=self.dbname, user=self.user, host=self.host, port=self.port)
-        cur = conn.cursor()
-        try:
-            cur.execute(self.sql)
-            self.nifIds = cur.fetchall()
-        except:
-            raise
-        finally:
-            cur.close()
-            conn.close()
-
-
-    ##
-    # select distinct view_nif_id from view_sources order by view_nif_id;  # run this on the concept mapper to populate
-    # WHERE IN THE HELL DOES view_nif_id COME FROM!?!??!?!?!?!
-
-class datasource_index:
-    """
-        the complete and utter madness that is the summary services has led me
-        to the conclusion that the only way forward is to pull the bloody ids
-        directly from said summary service and stick them in their own table
-        THIS SEEMS MONUMENTALLY STUPID
-    """
-
 
 ###
 #   base class for getting XML from various servies
@@ -221,8 +162,6 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict, nifid_count_total
 
-
-        
     def get_counts(self, term):
         """
             given a term return the summary counts for each unique nifid
@@ -323,17 +262,35 @@ class database_service:  # FIXME reimplement with asyncio?
     DEBUG = True
     def __init__(self):
         self.conn = pg.connect(dbname=self.dbname, user=self.user, host=self.host, port=self.port)
+        pg.extras.register_hstore(self.conn, globally=True)
     def __enter__(self):
         pass
     def __exit__(self, type_, value, traceback):
         self.conn.close()
 
-    def cursor_exec(self, SQL, args):
+    def mogrify(self, *args, **kwargs):
         cur = self.conn.cursor()
-        cur.execute(SQL, args)
-        tups = cur.fetchall()
-        cur.close()
-        return tups
+        try:
+            return cur.mogrify(*args, **kwargs)
+        except:
+            raise
+        finally:
+            cur.close()
+
+        return 
+    def cursor_exec(self, SQL, args=None):
+        cur = self.conn.cursor()
+        if args:
+            cur.execute(SQL, args)
+        else:
+            cur.execute(SQL)
+        try:
+            tups = cur.fetchall()
+            return tups
+        except pg.ProgrammingError:
+            return None
+        finally:
+            cur.close()
 
 
 class heatmap_service(database_service):
@@ -372,7 +329,7 @@ class heatmap_service(database_service):
             self.term_count_dict = {}  # reset the cache since new source
             self.term_count_dict[TOTAL_TERM] = nifid_count_total
         else:  # check for changes in values
-            for nifid, old_value, in self.term_count_dict[TOTAL_TERM]:
+            for nifid, old_value in self.term_count_dict[TOTAL_TERM].items():
                 if nifid_count_total[nifid] != old_value:
                     self.term_count_dict = {}
                     self.term_count_dict[TOTAL_TERM] = nifid_count_total
@@ -387,7 +344,7 @@ class heatmap_service(database_service):
                 JOIN term_history AS th ON th.id=junc.term_history_id
                 WHERE hp.doi=%s;"""
         tuples = self.cursor_exec(sql, (doi,))
-        hm_data = {term:nifid_count for term, nifid_count in tuples}
+        hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
         return hm_data
 
     def get_heatmap_from_doi(self, doi, term_id_order=None, src_id_order=None, output='json'):
@@ -403,6 +360,7 @@ class heatmap_service(database_service):
     def get_term_counts(self, *terms):  #FIXME this fails if given an id!
         """ given a collection of terms returns a dict of dicts of their counts
         """
+        assert type(terms[0]) == str, "terms[0] has wrong type: %s" % terms
         # TODO do we want to deal with id/term overlap? (NO)
         terms = tuple(set([TOTAL_TERM]+list(terms)))  #removes dupes
         term_count_dict = {}
@@ -410,6 +368,7 @@ class heatmap_service(database_service):
             try:
                 nifid_count = self.term_count_dict[term]
             except KeyError:
+                print(term)
                 nifid_count = self.summary_server.get_counts(term)
                 self.term_count_dict[term] = nifid_count
 
@@ -445,7 +404,7 @@ class heatmap_service(database_service):
             this is also where we will check to see if everything is up to date
         """
         self.check_counts() #call to * to validate counts
-        hm_data = get_term_counts(terms)  # call this internally to avoid race conds
+        hm_data = self.get_term_counts(*terms)  # call this internally to avoid race conds
 
         #create a new record in heatmap_prov
             #mint a new doi
@@ -454,9 +413,14 @@ class heatmap_service(database_service):
             #XXX prov id
         doi = self.make_doi()
         sql_hp = "INSERT INTO heatmap_prov (doi) VALUES(%s);"
+        sql_hp_id = "SELECT MAX(id) from heatmap_prov"
         args = (doi,)
-        result = self.cursor_exec(sql_hp, args)
-        hp_id = f(result)  # FIXME
+        before = self.cursor_exec(sql_hp_id)
+        self.cursor_exec(sql_hp, args)
+        result = self.cursor_exec(sql_hp_id)
+        print(before, result)
+        assert before != result
+        hp_id = result[0][0]
 
         #check if we already have matching data in term_history
             #if we have matching data record the
@@ -469,38 +433,47 @@ class heatmap_service(database_service):
                             """ # only check the latest record
         args = (terms,)
         result = self.cursor_exec(sql_check_terms, args)
-        newest_term_counts = {term:(th_id, nifid_count) for term, th_id, nif_count in result}
+        newest_term_counts = {term:(th_id, int_cast(nifid_count)) for term, th_id, nifid_count in result}
 
-        sql_add_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s);"
+        sql_ins_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s);"
+        sql_th_id = "SELECT MAX(id) from term_history"
         th_ids = []
-        for term in terms:  # check against latest terms FIXME do we even need this? (yes?)
+        for term, new_nifid_count in hm_data.items():
             try:
-                th_id, nifid_count = newest_term_counts[term]
+                th_id, old_nifid_count = newest_term_counts[term]
+                old_nifid_count = int_cast(old_nifid_count)
             except KeyError:
-                nifid_count = None
+                old_nifid_count = None
 
-            if hm_data[term] != nifid_count:
-                ins_args = (term, hm_data[term])
-                result = self.cursor_exec(sql_add_term, ins_args)
-                th_id = f(result)  # FIXME
+            if new_nifid_count != old_nifid_count:
+                before = self.cursor_exec(sql_th_id)
+
+                ins_args = (term, str_cast(hm_data[term]))
+                self.cursor_exec(sql_ins_term, ins_args)
+
+                result = self.cursor_exec(sql_th_id)
+                print(before, result)
+                assert before != result
+                th_id = result[0][0]
 
             th_ids.append(th_id)
 
         #insert into heatmap_prov_to_term_history
             #XXX prov id #XXX history id pairs
-        sql_add_junc = "INSERT INTO heatmap_prov_to_term_history VALUES(%s,%s)"
+        sql_add_junc = b"INSERT INTO heatmap_prov_to_term_history VALUES "#(%s,%s)"
         hp_ids = [hp_id] * len(th_ids)
         junc_args = (hp_ids, th_ids)
-        self.cursor_exec(sql_add_junc, junc_args)
+        sql_values = b",".join(self.mogrify("(%s,%s)", tup) for tup in zip(*junc_args))
+        self.cursor_exec(sql_add_junc + sql_values)
 
         #commit it (probably wrap this in a try/except)
         self.conn.commit()
 
         return doi, hm_data
 
-    def make_doi(self):
+    def make_doi(self):  # TODO
         """ mint and register a new doi in all the right places """
-        raise NotImplementedError("FIXME")
+        #raise NotImplementedError("FIXME")
         doi = "THIS IS A FAKE DOI"
         return doi
 
@@ -512,12 +485,23 @@ class heatmap_service(database_service):
     def output_json(self, heatmap_data):
         """ return a json object with the raw data and the src_id and term_id mappings """
 
+    def __repr__(self):
+        return str(self.resources).replace('),','),\n')+'\n'+repr(self.term_count_dict).replace(',',',\n')
+
 ###
 #   utility functions  FIXME these should probably go elsewhere?
 ###
 
 def f(*args, **kwargs):
+    print("Take a peek at what this thing looks like.")
+    embed()
     raise NotImplementedError("Please implement me so I can become a real function ;_;")
+
+#FIXME is it possible to write a psycopg2 type cast to avoid this?
+def int_cast(dict):
+    return {k:int(v) for k,v in dict.items()}
+def str_cast(dict):
+    return {k:str(v) for k,v in dict.items()}
 
 def apply_order(dict_, key_order):
     """ applys an order to values of a dict based on an ordering of the keys
@@ -540,14 +524,14 @@ def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
     if len(tdict_sdict) < len(term_ids_order):  # term_ids can be a subset!
         # note that we *could* allow empty terms in the dict but that should
         # be handled elsewhere
+        embed()
         raise IndexError("Term orders must be subsets of the dict!")
     if len(tdict_sdict[TOTAL_TERM]) != len(src_ids_order):  # these must match
         raise IndexError("Source orders must match the total source counts!")
 
-    matrix = np.empty(len(term_ids_order), len(src_ids_order))
+    matrix = np.empty((len(term_ids_order), len(src_ids_order)))
     for i, term in enumerate(term_ids_order):
         matrix[i,:] = apply_order(hm_data[term], src_ids_order)
-
 
 def setup_db():
     """ execute blocks of sql delimited by --words-- in the setup file
@@ -558,10 +542,10 @@ def setup_db():
         lines = [' '+l.rstrip('\n').strip(' ') for l in f.readlines()]
     text = ''.join(lines)
     sql_blocks = [l.strip(' ') for l in text.split('--')][::2][1:]  #user, alter user, drop, db, tables, alter
-    #dbname='postgres', 
-    conn = pg.connect(dbname='postgres',user='postgres', host='localhost', port=5432)
-    cur = conn.cursor()
     try:
+        conn = pg.connect(dbname='postgres',user='postgres', host='localhost', port=5432)
+        cur = conn.cursor()
+
         for sql in sql_blocks[:4]:
             print(sql)
             if sql.startswith('DROP DATABASE') or sql.startswith('CREATE DATABASE') :
@@ -574,6 +558,7 @@ def setup_db():
                 conn.commit()
         cur.close()
         conn.close()
+
         conn = pg.connect(dbname='heatmap_test',user='postgres', host='localhost', port=5432)
         cur = conn.cursor()
         for sql in sql_blocks[4:7]:
@@ -586,24 +571,35 @@ def setup_db():
         cur.close()
         conn.close()
 
-
-
-
 ###
 #   main
 ###
 
 def main():
     #setup_db()
+    #return
     ts = term_service()
     ss = summary_service(ts)
     os = ontology_service()
-    hs = heatmap_service(ss, ts)
     t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
     r = "BFO_0000050"
     j = os.get_terms(t, r)
-    embed()
-    hs.__exit__(None,None,None)
+    test_terms = (
+        'brain',
+        'forebrain',
+        'midbrain',
+        'hindbrain',
+        'hippocampus',
+    )
+    try:
+        hs = heatmap_service(ss, ts)
+        hs.get_term_counts(*test_terms)
+        hs.make_heatmap_data(*test_terms)
+        embed()
+    except:
+        raise
+    finally:
+        hs.__exit__(None,None,None)
 
 
 
