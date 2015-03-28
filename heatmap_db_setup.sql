@@ -44,7 +44,7 @@ CREATE TABLE heatmap_prov(
     id serial NOT NULL,
     doi text,
     /*requesting_person text,  *//* ARGH THE DESIRE TO NORMALIZE we can do this with the dois later if we really want to, RI is not critical*/
-    "DateTime" timestamp without time zone,
+    "DateTime" timestamp default CURRENT_TIMESTAMP,  /*enforce this in the db*/
     CONSTRAINT heatmap_prov_pkey PRIMARY KEY (id)
 );
 
