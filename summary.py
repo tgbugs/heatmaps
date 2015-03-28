@@ -461,6 +461,10 @@ class heatmap_service(database_service):
                 th_id = result[0][0]
 
             th_ids.append(th_id)
+        if len(th_ids) == len(terms):  #all terms identical get existing doi
+            #check to make sure all the rows exist under a SINGLE doi
+            existing_doi = f()
+            return
 
         #insert into heatmap_prov_to_term_history
             #XXX prov id #XXX history id pairs
