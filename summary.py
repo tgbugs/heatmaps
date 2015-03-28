@@ -315,13 +315,14 @@ class database_service:  # FIXME reimplement with asyncio?
     """ This should sort of be the central hub for fielding io for the database
         it should work for caching for the phenogrid output and for csv output
     """
-    dbname = "heatmap"
-    user = "heatmapuser"
+    dbname = ""
+    user = ""
     host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
+    DEBUG = True
     def __enter__(self):
         self.conn = pg.connect(dbname=self.dbname, user=self.user, host=self.host, port=self.port)
-    def __exit__(self):
+    def __exit__(self, type_, value, traceback):
         self.conn.close()
 
     def cursor_exec(self, SQL, args):
@@ -333,10 +334,22 @@ class database_service:  # FIXME reimplement with asyncio?
 
 
 class heatmap_service(database_service):
+    """ The monolithic heatmap service that keeps a cache of the term counts
+        as well as term names and resource names/indexable status
 
-    def __init__(self, summary_server):
+        for the most part it is a lightweight wrapper on top of the summary
+        service but it also manages the provenance for each heatmap generated
+        and can retrieve specific heatmaps by doi, user, and date
+    """
+    dbname = "heatmap"
+    user = "heatmapuser"
+    host = "localhost"#"postgres-stage@neuinfo.org"
+    port = 5432
+    def __init__(self, summary_server, term_server):
         self.summary_server = summary_server
+        self.term_server = term_server
         self.term_count_dict = {TOTAL_TERM:{}}  # makes init play nice
+        self.term_names = {}
         self.resources = None
         self.check_counts()
         output_map = {
@@ -362,6 +375,7 @@ class heatmap_service(database_service):
                     break  # we already found a difference
 
     def get_heatmap_data_from_doi(self, doi):
+        # TODO user, date range too
         #sql = "SELECT th.term, th.term_counts FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
 
         sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
@@ -429,7 +443,6 @@ class heatmap_service(database_service):
         self.check_counts() #call to * to validate counts
         hm_data = get_term_counts(terms)  # call this internally to avoid race conds
 
-
         #create a new record in heatmap_prov
             #mint a new doi
             #put that doi wherever it needs to go for resolver purposes
@@ -440,7 +453,6 @@ class heatmap_service(database_service):
         args = (doi,)
         result = self.cursor_exec(sql_hp, args)
         hp_id = f(result)  # FIXME
-
 
         #check if we already have matching data in term_history
             #if we have matching data record the
@@ -470,14 +482,12 @@ class heatmap_service(database_service):
 
             th_ids.append(th_id)
 
-
         #insert into heatmap_prov_to_term_history
             #XXX prov id #XXX history id pairs
         sql_add_junc = "INSERT INTO heatmap_prov_to_term_history VALUES(%s,%s)"
         hp_ids = [hp_id] * len(th_ids)
         junc_args = (hp_ids, th_ids)
         self.cursor_exec(sql_add_junc, junc_args)
-
 
         #commit it (probably wrap this in a try/except)
         self.conn.commit()

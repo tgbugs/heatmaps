@@ -28,6 +28,7 @@ CREATE EXTENSION hstore SCHEMA heatmap;
 CREATE TABLE heatmap_prov(
     id serial NOT NULL,
     doi text,
+    requesting_user text,
     "DateTime" timestamp without time zone,
     CONSTRAINT heatmap_prov_pkey PRIMARY KEY (id)
 );
@@ -44,7 +45,7 @@ CREATE TABLE heatmap_prov_to_term_history(  -- we need this for the many-many ma
     term_history_id integer,
     CONSTRAINT heatmap_prov_id_fkey FOREIGN KEY (heatmap_prov_id)
         REFERENCES heatmap_prov (id) MATCH SIMPLE
-        ON UPDATE NO ACTION ON DELETE NO ACTION, 
+        ON UPDATE NO ACTION ON DELETE NO ACTION, -- we should never be deleting from these...
     CONSTRAINT term_history_id_fkey FOREIGN KEY (term_history_id)
         REFERENCES term_history (id) MATCH SIMPLE
         ON UPDATE NO ACTION ON DELETE NO ACTION
@@ -71,4 +72,5 @@ CREATE TABLE summary_view_entity(
 
 ALTER TABLE heatmap_prov OWNER TO heatmapuser;
 ALTER TABLE term_history OWNER TO heatmapuser;
+ALTER TABLE heatmap_prov_to_term_history OWNER TO heatmapuser;
 --ALTER TABLE term_hstores OWNER TO heatmapuser;
