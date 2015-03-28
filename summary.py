@@ -362,9 +362,14 @@ class heatmap_service(database_service):
                     break  # we already found a difference
 
     def get_heatmap_data_from_doi(self, doi):
-        sql = "SELECT th.term, th.term_hstore FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
+        #sql = "SELECT th.term, th.term_counts FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
+
+        sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
+                JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
+                JOIN term_history AS th ON th.id=junc.term_history_id
+                WHERE hp.doi=%s;"""
         tuples = self.cursor_exec(sql, (doi,))
-        hm_data = {term:hstore for term, hstore in tuples}
+        hm_data = {term:nifid_count for term, nifid_count in tuples}
         return hm_data
 
     def get_heatmap_from_doi(self, doi, term_id_order=None, src_id_order=None, output='json'):
@@ -376,13 +381,6 @@ class heatmap_service(database_service):
         if not src_id_order:
             term_id_order = sorted(hm_data[TOTAL_TERM])
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order)
-
-    def make_heatmap_data(self, *terms):
-        """ this call mints a heatmap and creates the prov record
-            this is also where we will check to see if everything is up to date
-        """
-        #call to * to validate counts
-        self.check_counts()
 
     def get_term_counts(self, *terms):
         """ given a collection of terms returns a dict of dicts of their counts
@@ -400,6 +398,98 @@ class heatmap_service(database_service):
             term_count_dict[term] = nifid_count
         return term_count_dict
 
+    def get_names_from_ids(self, id_order):
+        """ consistent way to get the names for term or src ids
+            we do it this way because we only stick the names on
+            at the end after everything else is done being orderd
+        """
+        # src names from self.resources
+        # term names from... self.term_server?? term keys will be a mix of names and ids
+            #we can run stats on term id coverage in the ontology
+        try:
+            name_order = []
+            for src_id in id_order:
+                name = self.resources[src_id][0]
+                name_order.append(name)
+        except KeyError:  # it's terms
+            name_order = []  # just in case something wonky happens up there
+            for term_id in id_order:
+                name = self.term_server.get_name(term_id)  #FIXME we should keep a cache of this
+                if name:
+                    names.append(name)
+                else:  # term_id isnt a term_id, so probably already a name
+                    names.append(term_id)
+
+        return name_order
+
+    def make_heatmap_data(self, *terms):  # FIXME error handling and dangling DOIs
+        """ this call mints a heatmap and creates the prov record
+            this is also where we will check to see if everything is up to date
+        """
+        self.check_counts() #call to * to validate counts
+        hm_data = get_term_counts(terms)  # call this internally to avoid race conds
+
+
+        #create a new record in heatmap_prov
+            #mint a new doi
+            #put that doi wherever it needs to go for resolver purposes
+            #create the record
+            #XXX prov id
+        doi = self.make_doi()
+        sql_hp = "INSERT INTO heatmap_prov (doi) VALUES(%s);"
+        args = (doi,)
+        result = self.cursor_exec(sql_hp, args)
+        hp_id = f(result)  # FIXME
+
+
+        #check if we already have matching data in term_history
+            #if we have matching data record the
+                #XXX history id
+            #if we dont have matching data record create the
+                #XXX history id
+        sql_check_terms = """SELECT id, term, term_counts FROM term_history
+                            WHERE id = (SELECT MAX(id) FROM term_history AS
+                            th WHERE th.term=term_history.term) AND term IN %s;
+                            """ # only check the latest record
+        args = (terms,)
+        result = self.cursor_exec(sql_check_terms, args)
+        newest_term_counts = {term:(th_id, nifid_count) for term, th_id, nif_count in result}
+
+        sql_add_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s);"
+        th_ids = []
+        for term in terms:  # check against latest terms FIXME do we even need this? (yes?)
+            try:
+                th_id, nifid_count = newest_term_counts[term]
+            except KeyError:
+                nifid_count = None
+
+            if hm_data[term] != nifid_count:
+                ins_args = (term, hm_data[term])
+                result = self.cursor_exec(sql_add_term, ins_args)
+                th_id = f(result)  # FIXME
+
+            th_ids.append(th_id)
+
+
+        #insert into heatmap_prov_to_term_history
+            #XXX prov id #XXX history id pairs
+        sql_add_junc = "INSERT INTO heatmap_prov_to_term_history VALUES(%s,%s)"
+        hp_ids = [hp_id] * len(th_ids)
+        junc_args = (hp_ids, th_ids)
+        self.cursor_exec(sql_add_junc, junc_args)
+
+
+        #commit it (probably wrap this in a try/except)
+        self.conn.commit()
+
+        return doi, hm_data
+
+    def make_doi(self):
+        """ mint and register a new doi in all the right places """
+        raise NotImplementedError("FIXME")
+        doi = "THIS IS A FAKE DOI"
+        return doi
+
     def output_csv(self, heatmap_data, term_id_order, src_id_order):
         """ consturct a csv file on the fly for download """
         #this needs access id->name mappings
@@ -411,6 +501,9 @@ class heatmap_service(database_service):
 ###
 #   utility functions  FIXME these should probably go elsewhere?
 ###
+
+def f(*args, **kwargs):
+    raise NotImplementedError("Please implement me so I can become a real function ;_;")
 
 def apply_order(dict_, key_order):
     """ applys an order to values of a dict based on an ordering of the keys
