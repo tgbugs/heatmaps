@@ -549,6 +549,42 @@ def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
         matrix[i,:] = apply_order(hm_data[term], src_ids_order)
 
 
+def setup_db():
+    """ execute blocks of sql delimited by --words-- in the setup file
+        first 4 blocks do user and database setup
+        the following 3 blocks do schema and table creation and alters
+    """
+    with open('heatmap_db_setup.sql', 'rt') as f:
+        lines = [' '+l.rstrip('\n').strip(' ') for l in f.readlines()]
+    text = ''.join(lines)
+    sql_blocks = [l.strip(' ') for l in text.split('--')][::2][1:]  #user, alter user, drop, db, tables, alter
+    #dbname='postgres', 
+    conn = pg.connect(dbname='postgres',user='postgres', host='localhost', port=5432)
+    cur = conn.cursor()
+    try:
+        for sql in sql_blocks[:4]:
+            print(sql)
+            if sql.startswith('DROP DATABASE') or sql.startswith('CREATE DATABASE') :
+                conn.set_isolation_level(0)
+                cur.execute(sql)
+                conn.commit()
+                conn.set_isolation_level(1)
+            else:
+                cur.execute(sql)
+                conn.commit()
+        cur.close()
+        conn.close()
+        conn = pg.connect(dbname='heatmap_test',user='postgres', host='localhost', port=5432)
+        cur = conn.cursor()
+        for sql in sql_blocks[4:7]:
+            print(sql)
+            cur.execute(sql)
+            conn.commit()
+    except:
+        raise
+    finally:
+        cur.close()
+        conn.close()
 
 
 
@@ -558,6 +594,7 @@ def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
 ###
 
 def main():
+    #setup_db()
     ts = term_service()
     ss = summary_service(ts)
     os = ontology_service()
