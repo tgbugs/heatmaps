@@ -34,6 +34,7 @@ SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for
 #SHOULD PROV also be handled here?
 #SHOULD odering of rows and columns go here? NO
 # TODO probably need to make this work via cgi? (probably not cgi)
+# TODO logging and perf
 
 ### THINGS THAT GO ELSEWHERE
 # SCIGRAPH EXPANSION DOES NOT GO HERE  #FIXME but maybe running/handling the transitive closure does?
@@ -328,11 +329,13 @@ class heatmap_service(database_service):
             self.resources = resources
             self.term_count_dict = {}  # reset the cache since new source
             self.term_count_dict[TOTAL_TERM] = nifid_count_total
+            print("CACHE DIRTY")
         else:  # check for changes in values
             for nifid, old_value in self.term_count_dict[TOTAL_TERM].items():
                 if nifid_count_total[nifid] != old_value:
                     self.term_count_dict = {}
                     self.term_count_dict[TOTAL_TERM] = nifid_count_total
+                    print("CACHE DIRTY")
                     break  # we already found a difference
 
     def get_heatmap_data_from_doi(self, doi):
@@ -354,7 +357,7 @@ class heatmap_service(database_service):
         if not term_id_order:
             term_id_order = sorted(hm_data) 
         if not src_id_order:
-            term_id_order = sorted(hm_data[TOTAL_TERM])
+            src_id_order = sorted(hm_data[TOTAL_TERM])
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order)
 
     def get_term_counts(self, *terms):  #FIXME this fails if given an id!
@@ -405,13 +408,14 @@ class heatmap_service(database_service):
         """
         self.check_counts() #call to * to validate counts
         hm_data = self.get_term_counts(*terms)  # call this internally to avoid race conds
+        terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM
 
         #create a new record in heatmap_prov
             #mint a new doi
             #put that doi wherever it needs to go for resolver purposes
             #create the record
             #XXX prov id
-        doi = self.make_doi()
+        doi = self.make_doi()  # FIXME shouldn't we check to see if there is already a heatmap that matches the DOI before minting a new one?
         sql_hp = "INSERT INTO heatmap_prov (doi) VALUES(%s);"
         sql_hp_id = "SELECT MAX(id) from heatmap_prov"
         args = (doi,)
@@ -433,7 +437,7 @@ class heatmap_service(database_service):
                             """ # only check the latest record
         args = (terms,)
         result = self.cursor_exec(sql_check_terms, args)
-        newest_term_counts = {term:(th_id, int_cast(nifid_count)) for term, th_id, nifid_count in result}
+        newest_term_counts = {term:(th_id, int_cast(nifid_count)) for th_id, term, nifid_count in result}
 
         sql_ins_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s);"
         sql_th_id = "SELECT MAX(id) from term_history"
@@ -469,7 +473,7 @@ class heatmap_service(database_service):
         #commit it (probably wrap this in a try/except)
         self.conn.commit()
 
-        return doi, hm_data
+        return doi, hm_data  # TODO pull the datetime out
 
     def make_doi(self):  # TODO
         """ mint and register a new doi in all the right places """
