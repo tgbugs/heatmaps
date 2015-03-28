@@ -62,7 +62,7 @@ TOTAL_TERM_NAME = 'Totals'
 #   base class for getting XML from various servies
 ###
 
-class rest_service:
+class rest_service:  #TODO this REALLY needs to be async... with max timeout "couldnt do x terms"
     """ base class for things that need to get json docs from REST services
     """
     _timeout = 1
@@ -120,10 +120,7 @@ class rest_service:
 
 class summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
     url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
-    _timeout = 10
-
-    def __init__(self, term_server):  # FIXME this feels wrong :/
-        self.term_server = term_server
+    _timeout = 20
 
     def get_sources(self):
         """
@@ -163,23 +160,13 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict, nifid_count_total
 
-    def get_counts(self, term):
+    def get_counts(self, term):  #FIXME this really needs to be async or something
         """
-            given a term return the summary counts for each unique nifid
-            full descriptions for each nifid do not duplicated here
-            store once for all the records when we get that data
+            given a term return a dict of counts for each unique src_nifid
+
+            IDS ARE NOT HANDLED HERE
         """
-
-        if term != "*":  # FIXME we should never be calling this?
-            term_id = self.term_server.get_id(term)
-
-            if term_id:  # get_id returns None if > 1 id
-                query_url = self.url % term_id
-            else:  # let the summary service sort out the id mess
-                query_url = self.url % term
-        else:
-            query_url = self.url % term  #FIXME ICK
-
+        query_url = self.url % term
         xml = self.get_xml(query_url)
         nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
                                       '//literatureSummary/@resultCount')
@@ -208,8 +195,6 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         return nifid_count
 
 
-
-
 ###
 #   Map terms to ids  FIXME we need some way to resolve multiple mappings to ids ;_;
 ###
@@ -217,7 +202,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 class term_service(rest_service):
     """ let us try this with json: result--works pretty well """
     url = SCIGRAPH + "/scigraph/vocabulary/term/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
-    _timeout = 1
+    _timeout = 2
 
     def get_id(self, term):
         query_url = self.url % term
@@ -246,6 +231,23 @@ class ontology_service(rest_service):
 
         #FIXME the test on part of produces utter madness, tree is not clean
         return records, names
+
+    def order_nifids(self, nifids, rule):  # TODO
+        """ given a set of nifids use some rule to order them
+
+            also needs to handle a mixture of terms and nifids
+
+            and stick everything that can't be ordered into its own group
+        """
+
+        # note that the "rule" is almost certainly going to be some dsl ;_;
+        # or I'm just going to implement a bunch of precanned ways to order stuff
+        # and then the rule would just be a string mapped to a function 
+
+        # XXX ANOTHER NOTE: given a set of terms, use the ontology to expand
+        # to similar terms by traversing back up to common nodes and then
+        # back down, the problem of course is all the relationships in UBERON
+        # are now dirty >_< (and synonyms suck)
 
 ###
 #   Stick the collected data in a datastore (postgres)
@@ -306,6 +308,7 @@ class heatmap_service(database_service):
     user = "heatmapuser"
     host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
+    DOI_TERM_LIMIT = 5
     def __init__(self, summary_server, term_server):
         super().__init__()
         self.summary_server = summary_server
@@ -373,21 +376,41 @@ class heatmap_service(database_service):
 
     def get_term_counts(self, *terms):  #FIXME this fails if given an id!
         """ given a collection of terms returns a dict of dicts of their counts
+            this is where we make calls to summary_server, we are currently handling
+            term failures in here which seems to make sense for time efficiency
         """
         assert type(terms[0]) == str, "terms[0] has wrong type: %s" % terms
         # TODO do we want to deal with id/term overlap? (NO)
         terms = tuple(set([TOTAL_TERM]+list(terms)))  #removes dupes
         term_count_dict = {}
+        failed_terms = []
         for term in terms:
             try:
                 nifid_count = self.term_count_dict[term]
             except KeyError:
                 print(term)
-                nifid_count = self.summary_server.get_counts(term)
-                self.term_count_dict[term] = nifid_count
+                try:  # FIXME :/
+                    nifid_count = self.summary_server.get_counts(term)
+                    self.term_count_dict[term] = nifid_count
+                except requests.exceptions.ReadTimeout:
+                    failed_terms.apppend(term)
+                    continue  # drop the term from the results
 
             term_count_dict[term] = nifid_count
-        return term_count_dict
+
+        if failed_terms: print("Failed terms: ", failed_terms)
+        return term_count_dict, failed_terms
+
+    def get_terms_from_ontology(self, term):
+        """  TODO somehow this seems like it should be able to take a more
+            complex query or something... 
+
+            also not clear if we actually want to hand this in THIS class
+            or if we want to put this code in the ontology server or something
+            
+            same issue with the orders, the order service should probably stay
+            with the ontology server
+        """
 
     def get_names_from_ids(self, id_order):
         """ consistent way to get the names for term or src ids
@@ -413,29 +436,17 @@ class heatmap_service(database_service):
 
         return name_order
 
-    def make_heatmap_data(self, *terms):  # FIXME error handling and dangling DOIs
+    def make_heatmap_data(self, *terms):  # FIXME error handling
         """ this call mints a heatmap and creates the prov record
             this is also where we will check to see if everything is up to date
         """
         self.check_counts() #call to * to validate counts
-        hm_data = self.get_term_counts(*terms)  # call this internally to avoid race conds
+        hm_data, fails = self.get_term_counts(*terms)  # call this internally to avoid race conds
         terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM
 
-        #create a new record in heatmap_prov
-            #mint a new doi
-            #put that doi wherever it needs to go for resolver purposes
-            #create the record
-            #XXX prov id
-        doi = self.make_doi()  # FIXME shouldn't we check to see if there is already a heatmap that matches the DOI before minting a new one?
-        sql_hp = "INSERT INTO heatmap_prov (doi) VALUES(%s);"
-        sql_hp_id = "SELECT MAX(id) from heatmap_prov"
-        args = (doi,)
-        before = self.cursor_exec(sql_hp_id)
-        self.cursor_exec(sql_hp, args)
-        result = self.cursor_exec(sql_hp_id)
-        print(before, result)
-        assert before != result
-        hp_id = result[0][0]
+        if len(terms) < self.DOI_TERM_MIN:  #TODO need to pass error back out for the web
+            print("We do not mint DOIS for heatmaps with less than %s terms."%self.DOI_TERM_MIN)
+            return None, hm_data
 
         #check if we already have matching data in term_history
             #if we have matching data record the
@@ -448,7 +459,8 @@ class heatmap_service(database_service):
                             """ # only check the latest record
         args = (terms,)
         result = self.cursor_exec(sql_check_terms, args)
-        newest_term_counts = {term:(th_id, int_cast(nifid_count)) for th_id, term, nifid_count in result}
+        newest_term_counts = {term:(th_id, int_cast(nifid_count)) for
+                              th_id, term, nifid_count in result}
 
         sql_ins_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s);"
         sql_th_id = "SELECT MAX(id) from term_history"
@@ -490,6 +502,26 @@ class heatmap_service(database_service):
                     print('This heatmap already exists!')  # FIXME
                     return existing_doi, hm_data
 
+        #create a new record in heatmap_prov since we didn't find an existing record
+            #TODO we only want to do this if someone requests a term that is not in cache
+            #we probably don't want to stash the whole cache under a doi because could be vbig
+            #reccomend that users request the terms they need a single time for download
+            #OR we just rate limit the number of heatmaps that can be requested XXX <-this
+            #mint a new doi
+            #put that doi wherever it needs to go for resolver purposes
+            #create the record
+            #XXX prov id
+        doi = self.make_doi()
+        sql_hp = "INSERT INTO heatmap_prov (doi) VALUES(%s);"
+        sql_hp_id = "SELECT MAX(id) from heatmap_prov"
+        args = (doi,)
+        before = self.cursor_exec(sql_hp_id)
+        self.cursor_exec(sql_hp, args)
+        result = self.cursor_exec(sql_hp_id)
+        print(before, result)
+        assert before != result
+        hp_id = result[0][0]
+
         #insert into heatmap_prov_to_term_history
             #XXX prov id #XXX history id pairs
         sql_add_junc = b"INSERT INTO heatmap_prov_to_term_history VALUES "#(%s,%s)"
@@ -518,7 +550,9 @@ class heatmap_service(database_service):
         """ return a json object with the raw data and the src_id and term_id mappings """
 
     def __repr__(self):
-        return str(self.resources).replace('),','),\n')+'\n'+repr(self.term_count_dict).replace(',',',\n')
+        a = str(self.resources).replace('),','),\n')+'\n'
+        b = repr(self.term_count_dict).replace(',',',\n')
+        return 
 
 ###
 #   utility functions  FIXME these should probably go elsewhere?
@@ -621,13 +655,18 @@ def main():
             'brain',
             'forebrain',
             'midbrain',
+
             'hindbrain',
             'hippocampus',
+            'hypothalamus',
         ),
         test_subset = (
             'forebrain',
             'midbrain',
             'hindbrain',
+
+            'hippocampus',
+            'hypothalamus',
         ),
         test_set_2 = (
             'thalamus',
@@ -637,7 +676,7 @@ def main():
             'pons',
             'cerebellum',
             'cortex',
-        )
+        ),
         test_overlap = (
             'forebrain',
             'midbrain',
@@ -650,7 +689,7 @@ def main():
     )
     try:
         hs = heatmap_service(ss, ts)
-        for test_terms in test_dict.values:
+        for test_terms in test_dict.values():
             hs.get_term_counts(*test_terms)
             hs.make_heatmap_data(*test_terms)
         embed()
