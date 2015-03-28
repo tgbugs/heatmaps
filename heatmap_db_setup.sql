@@ -23,23 +23,32 @@ GRANT ALL ON SCHEMA heatmap TO heatmapuser;
 --now connect to the database and make some tables
 CREATE EXTENSION hstore SCHEMA heatmap;
 
-SET SCHEMA 'heatmap';
+--SET SCHEMA 'heatmap';
 
 CREATE TABLE heatmap_prov(
-    id integer,
+    id serial NOT NULL,
     doi text,
     "DateTime" timestamp without time zone,
     CONSTRAINT heatmap_prov_pkey PRIMARY KEY (id)
 );
 
 CREATE TABLE term_history(
-    heatmap_prov_id integer,
+    id serial NOT NULL,
     term text,
-    term_hstore hstore,
+    term_counts hstore,
+    CONSTRAINT term_history_pkey PRIMARY KEY (id)
+);
+
+CREATE TABLE heatmap_prov_to_term_history(  -- we need this for the many-many mapping
+    heatmap_prov_id integer,
+    term_history_id integer,
     CONSTRAINT heatmap_prov_id_fkey FOREIGN KEY (heatmap_prov_id)
         REFERENCES heatmap_prov (id) MATCH SIMPLE
+        ON UPDATE NO ACTION ON DELETE NO ACTION, 
+    CONSTRAINT term_history_id_fkey FOREIGN KEY (term_history_id)
+        REFERENCES term_history (id) MATCH SIMPLE
         ON UPDATE NO ACTION ON DELETE NO ACTION
-);
+)
 
 /* We don't need this table :)
 CREATE TABLE term_hstores(
