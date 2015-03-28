@@ -320,8 +320,10 @@ class database_service:  # FIXME reimplement with asyncio?
     host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
     DEBUG = True
-    def __enter__(self):
+    def __init__(self):
         self.conn = pg.connect(dbname=self.dbname, user=self.user, host=self.host, port=self.port)
+    def __enter__(self):
+        pass
     def __exit__(self, type_, value, traceback):
         self.conn.close()
 
