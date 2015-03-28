@@ -9,9 +9,9 @@
 
 """
 
-import psycopg2
 import requests
 import libxml2
+import psycopg2 as pg
 
 import numpy as np
 
@@ -54,6 +54,7 @@ SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for
 SCIGRAPH = "http://matrix.neuinfo.org:9000"
 LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
 TOTAL_TERM = 'federation_totals'  # FIXME we need to come up with a name for this though because * is reserved in sql
+TOTAL_TERM_NAME = 'Totals'
 
 ###
 #   The index/dict that maps columns to ids
@@ -215,7 +216,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
                     raise IndexError('too many counts!')
                 count = int(putative_count[0].content)
                 resource_data_dict[nifId] = db, indexable
-                nifid_count[nifId] = count
+                nifid_count_total[nifId] = count
 
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict, nifid_count_total
@@ -343,15 +344,16 @@ class heatmap_service(database_service):
         service but it also manages the provenance for each heatmap generated
         and can retrieve specific heatmaps by doi, user, and date
     """
-    dbname = "heatmap"
+    dbname = "heatmap_test"
     user = "heatmapuser"
     host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
     def __init__(self, summary_server, term_server):
+        super().__init__()
         self.summary_server = summary_server
         self.term_server = term_server
         self.term_count_dict = {TOTAL_TERM:{}}  # makes init play nice
-        self.term_names = {}
+        self.term_names = {TOTAL_TERM:TOTAL_TERM_NAME}
         self.resources = None
         self.check_counts()
         output_map = {
@@ -398,11 +400,11 @@ class heatmap_service(database_service):
             term_id_order = sorted(hm_data[TOTAL_TERM])
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order)
 
-    def get_term_counts(self, *terms):
+    def get_term_counts(self, *terms):  #FIXME this fails if given an id!
         """ given a collection of terms returns a dict of dicts of their counts
         """
         # TODO do we want to deal with id/term overlap? (NO)
-        terms = tuple(set([TOTAL_TERM].extend(terms)))  #removes dupes
+        terms = tuple(set([TOTAL_TERM]+list(terms)))  #removes dupes
         term_count_dict = {}
         for term in terms:
             try:
@@ -559,10 +561,12 @@ def main():
     ts = term_service()
     ss = summary_service(ts)
     os = ontology_service()
+    hs = heatmap_service(ss, ts)
     t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
     r = "BFO_0000050"
     j = os.get_terms(t, r)
     embed()
+    hs.__exit__(None,None,None)
 
 
 
