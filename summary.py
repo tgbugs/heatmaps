@@ -338,6 +338,16 @@ class heatmap_service(database_service):
                     print("CACHE DIRTY")
                     break  # we already found a difference
 
+    def get_heatmap_from_id(self, hm_id):
+        sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
+                JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
+                JOIN term_history AS th ON th.id=junc.term_history_id
+                WHERE hp.id=%s;"""
+        args = (hm_id,)
+        tuples = self.cursor_exec(sql, args)
+        hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
+        return hm_data
+
     def get_heatmap_data_from_doi(self, doi):
         # TODO user, date range too
         #sql = "SELECT th.term, th.term_counts FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
@@ -346,7 +356,8 @@ class heatmap_service(database_service):
                 JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
                 JOIN term_history AS th ON th.id=junc.term_history_id
                 WHERE hp.doi=%s;"""
-        tuples = self.cursor_exec(sql, (doi,))
+        args = (doi,)
+        tuples = self.cursor_exec(sql, args)
         hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
         return hm_data
 
@@ -449,7 +460,7 @@ class heatmap_service(database_service):
             except KeyError:
                 old_nifid_count = None
 
-            if new_nifid_count != old_nifid_count:
+            if new_nifid_count != old_nifid_count:  # reuse matching counts
                 before = self.cursor_exec(sql_th_id)
 
                 ins_args = (term, str_cast(hm_data[term]))
@@ -462,9 +473,22 @@ class heatmap_service(database_service):
 
             th_ids.append(th_id)
         if len(th_ids) == len(terms):  #all terms identical get existing doi
-            #check to make sure all the rows exist under a SINGLE doi
-            existing_doi = f()
-            return
+            sql_hp_ids = ("SELECT DISTINCT heatmap_prov_id FROM"
+            " heatmap_prov_to_term_history WHERE term_history_id IN %s")
+            sql = ("SELECT DISTINCT heatmap_prov_id, term_history_id FROM"
+            " heatmap_prov_to_term_history WHERE term_history_id IN %s")
+            args = (tuple(th_ids),)
+            existing_hm_ids = self.cursor_exec(sql_hp_ids, args)[0]
+            existing_th_ids = self.cursor_exec(sql, args)
+
+            for existing_hm_id in existing_hm_ids:
+                old_th_ids = [ti for hi, ti in existing_th_ids if hi == existing_hm_id]
+                if set(th_ids) == set(old_th_ids): #rows exist under a SINGLE doi
+                    sql_get_doi = "SELECT doi FROM heatmap_prov WHERE id=%s"
+                    args = (existing_hm_id,)
+                    existing_doi = self.cursor_exec(sql_get_doi, args)[0][0]
+                    print('This heatmap already exists!')  # FIXME
+                    return existing_doi, hm_data
 
         #insert into heatmap_prov_to_term_history
             #XXX prov id #XXX history id pairs
@@ -592,17 +616,43 @@ def main():
     t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
     r = "BFO_0000050"
     j = os.get_terms(t, r)
-    test_terms = (
-        'brain',
-        'forebrain',
-        'midbrain',
-        'hindbrain',
-        'hippocampus',
+    test_dict = dict(
+        test_base = (
+            'brain',
+            'forebrain',
+            'midbrain',
+            'hindbrain',
+            'hippocampus',
+        ),
+        test_subset = (
+            'forebrain',
+            'midbrain',
+            'hindbrain',
+        ),
+        test_set_2 = (
+            'thalamus',
+            'superior colliculus',
+            'inferior olive',
+
+            'pons',
+            'cerebellum',
+            'cortex',
+        )
+        test_overlap = (
+            'forebrain',
+            'midbrain',
+            'hindbrain',
+
+            'pons',
+            'cerebellum',
+            'cortex',
+        ),
     )
     try:
         hs = heatmap_service(ss, ts)
-        hs.get_term_counts(*test_terms)
-        hs.make_heatmap_data(*test_terms)
+        for test_terms in test_dict.values:
+            hs.get_term_counts(*test_terms)
+            hs.make_heatmap_data(*test_terms)
         embed()
     except:
         raise
