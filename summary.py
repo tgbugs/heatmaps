@@ -308,7 +308,7 @@ class heatmap_service(database_service):
     user = "heatmapuser"
     host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
-    DOI_TERM_LIMIT = 5
+    DOI_TERM_MIN = 5
     def __init__(self, summary_server, term_server):
         super().__init__()
         self.summary_server = summary_server
@@ -458,48 +458,45 @@ class heatmap_service(database_service):
                             th WHERE th.term=term_history.term) AND term IN %s;
                             """ # only check the latest record
         args = (terms,)
-        result = self.cursor_exec(sql_check_terms, args)
+        check_result = self.cursor_exec(sql_check_terms, args)
         newest_term_counts = {term:(th_id, int_cast(nifid_count)) for
-                              th_id, term, nifid_count in result}
+                              th_id, term, nifid_count in check_result}
 
         sql_ins_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s);"
         sql_th_id = "SELECT MAX(id) from term_history"
         th_ids = []
-        for term, new_nifid_count in hm_data.items():
+        for term, new_nifid_count in hm_data.items():  # validate terms counts
             try:
                 th_id, old_nifid_count = newest_term_counts[term]
                 old_nifid_count = int_cast(old_nifid_count)
             except KeyError:
                 old_nifid_count = None
 
-            if new_nifid_count != old_nifid_count:  # reuse matching counts
-                before = self.cursor_exec(sql_th_id)
-
+            if new_nifid_count != old_nifid_count:  # we cant reuse counts
                 ins_args = (term, str_cast(hm_data[term]))
                 self.cursor_exec(sql_ins_term, ins_args)
-
-                result = self.cursor_exec(sql_th_id)
-                print(before, result)
-                assert before != result
+                ti_result = self.cursor_exec(sql_th_id)
                 th_id = result[0][0]
 
             th_ids.append(th_id)
+
         if len(th_ids) == len(terms):  #all terms identical get existing doi
             sql_hp_ids = ("SELECT DISTINCT heatmap_prov_id FROM"
             " heatmap_prov_to_term_history WHERE term_history_id IN %s")
             sql = ("SELECT DISTINCT heatmap_prov_id, term_history_id FROM"
             " heatmap_prov_to_term_history WHERE term_history_id IN %s")
             args = (tuple(th_ids),)
-            existing_hm_ids = self.cursor_exec(sql_hp_ids, args)[0]
+            existing_hm_ids = self.cursor_exec(sql_hp_ids, args)
             existing_th_ids = self.cursor_exec(sql, args)
 
-            for existing_hm_id in existing_hm_ids:
+            # we need hit the newest hm_ids first in case 
+            for (existing_hm_id,) in existing_hm_ids:
                 old_th_ids = [ti for hi, ti in existing_th_ids if hi == existing_hm_id]
                 if set(th_ids) == set(old_th_ids): #rows exist under a SINGLE doi
                     sql_get_doi = "SELECT doi FROM heatmap_prov WHERE id=%s"
                     args = (existing_hm_id,)
                     existing_doi = self.cursor_exec(sql_get_doi, args)[0][0]
-                    print('This heatmap already exists!')  # FIXME
+                    print('Yes this heatmap already exists!')  # FIXME
                     return existing_doi, hm_data
 
         #create a new record in heatmap_prov since we didn't find an existing record
@@ -515,12 +512,9 @@ class heatmap_service(database_service):
         sql_hp = "INSERT INTO heatmap_prov (doi) VALUES(%s);"
         sql_hp_id = "SELECT MAX(id) from heatmap_prov"
         args = (doi,)
-        before = self.cursor_exec(sql_hp_id)
         self.cursor_exec(sql_hp, args)
-        result = self.cursor_exec(sql_hp_id)
-        print(before, result)
-        assert before != result
-        hp_id = result[0][0]
+        hp_result = self.cursor_exec(sql_hp_id)
+        hp_id = hp_result[0][0]
 
         #insert into heatmap_prov_to_term_history
             #XXX prov id #XXX history id pairs
