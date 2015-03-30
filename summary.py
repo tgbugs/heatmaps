@@ -94,28 +94,10 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
         else:
             raise IOError("Get failed %s %s"%(response.status_code, response.reason))
 
-
-    def _xpath(self, xml, *queries):
-        """
-            run a set of xpath queries
-            TODO: consider switching lxml for libxml2?
-        """
-        try:
-            xmlDoc = libxml2.parseDoc(xml)
-        except libxml2.parserError:
-            raise
-
-        context = xmlDoc.xpathNewContext()
-        results = [context.xpathEval(query) for query in queries]
-
-        if len(results) == 1:
-            return results[0]
-        else:
-            return tuple(results)
-
     def xpath(self, xml, *queries):
+        """ Run a set of xpath queries. """
         try:
-            xmlDoc = etree.parse(xml)
+            xmlDoc = etree.fromstring(xml.encode())
         except etree.ParseError:
             raise  # TODO
         
@@ -133,6 +115,29 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
 class summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
     url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
     _timeout = 20
+
+    @staticmethod
+    def _walk_nodes(nodes, *keys):
+        """ always return counts, any extra vals goes their own dict """
+        resource_data_dict = {}
+        nifid_count = {}
+        for node in nodes:
+            if node.get('nifId') not in resource_data_dict:  # cull dupes
+                nifId = node.get('nifId')
+
+                putative_count = node.xpath('./count')
+                if len(putative_count) > 1:
+                    print(TOTAL_TERM_ID, TOTAL_TERM_ID_NAME, [c.content for c in putative_count])
+                    raise IndexError('too many counts!')  #FIXME we must handle this
+                count = int(putative_count[0].text)
+                nifid_count[nifId] = count
+
+                if keys:
+                    vals = tuple([node.get(key) for key in keys])
+                    resource_data_dict[nifId] = vals
+
+        if keys: print("KEYS?", keys)
+        return (nifid_count, resource_data_dict) if keys else nifid_count
 
     def get_sources(self):
         """
@@ -153,46 +158,10 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         nifid_count_total, resource_data_dict = self._walk_nodes(nodes, 'db', 'indexable')
 
         resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature')
-        nifid_count_total[LITERATURE_ID] = int(lit[0].text)
-
-        """
-        for node in nodes:
-            if node.get('nifId') not in resource_data_dict:  # cull dupes
-                nifId = node.get('nifId')
-                db = node.get('db')
-                indexable = node.get('indexable')
-                putative_count = node.xpath('./count')
-                if len(putative_count) > 1:
-                    print(TOTAL_TERM_ID, TOTAL_TERM_ID_NAME, [c.content for c in putative_count])
-                    raise IndexError('too many counts!')
-                count = int(putative_count[0].text)
-                resource_data_dict[nifId] = db, indexable
-                nifid_count_total[nifId] = count
-        #"""
+        nifid_count_total[LITERATURE_ID] = int(lit[0])
 
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict, nifid_count_total
-
-    def _walk_nodes(nodes, *keys):
-        """ always return counts, any extra vals goes their own dict """
-        resource_data_dict = {}
-        nifid_count_total = {}
-        for node in nodes:
-            if node.get('nifId') not in resource_data_dict:  # cull dupes
-                nifId = node.get('nifId')
-
-                putative_count = node.xpath('./count')
-                if len(putative_count) > 1:
-                    print(TOTAL_TERM_ID, TOTAL_TERM_ID_NAME, [c.content for c in putative_count])
-                    raise IndexError('too many counts!')  #FIXME we must handle this
-                count = int(putative_count[0].text)
-                nifid_count_total[nifId] = count
-
-                if keys:
-                    vals = tuple([node.get(key) for key in keys])
-                    resource_data_dict[nifId] = vals
-
-        return nifid_count, resource_data_dict if keys else nifid_count
 
     def get_counts(self, term):  #FIXME this really needs to be async or something
         """
@@ -211,22 +180,9 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         if name != term:
             raise TypeError('for some reason name != term: %s != %s'%(name, term))
 
-        """
-        nifid_count = {}
-
-        for node in nodes:
-            if node.get('nifId') not in nifid_count:
-                nifId = node.get('nifId')
-                putative_count = node.xpath('./count')
-                if len(putative_count) > 1:
-                    print(term, name, [c.text for c in putative_count])
-                    raise IndexError('too many counts!')  # FIXME this must be handled
-                count = int(putative_count[0].text)
-                nifid_count[nifId] = count
-        #"""
-
         nifid_count = self._walk_nodes(nodes)
-        nifid_count[LITERATURE_ID] = int(lit[0].text)
+        print("nifid_count", nifid_count)
+        nifid_count[LITERATURE_ID] = int(lit[0])
 
         return nifid_count
 
@@ -512,7 +468,7 @@ class heatmap_service(database_service):
                 ins_args = (term, str_cast(hm_data[term]))
                 self.cursor_exec(sql_ins_term, ins_args)
                 ti_result = self.cursor_exec(sql_th_id)
-                th_id = result[0][0]
+                th_id = ti_result[0][0]
 
             th_ids.append(th_id)
 
