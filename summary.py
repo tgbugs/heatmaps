@@ -10,9 +10,9 @@
 """
 
 import requests
-import libxml2
 import psycopg2 as pg
 from psycopg2.extras import register_hstore
+from lxml import etree
 
 import numpy as np
 
@@ -55,8 +55,8 @@ SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for
 
 SCIGRAPH = "http://matrix.neuinfo.org:9000"
 LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
-TOTAL_TERM = 'federation_totals'  # FIXME we need to come up with a name for this though because * is reserved in sql
-TOTAL_TERM_NAME = 'Totals'
+TOTAL_TERM_ID = 'federation_totals'  # FIXME we need to come up with a name for this though because * is reserved in sql
+TOTAL_TERM_ID_NAME = 'Totals'
 
 ###
 #   base class for getting XML from various servies
@@ -95,7 +95,7 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
             raise IOError("Get failed %s %s"%(response.status_code, response.reason))
 
 
-    def xpath(self, xml, *queries):
+    def _xpath(self, xml, *queries):
         """
             run a set of xpath queries
             TODO: consider switching lxml for libxml2?
@@ -113,6 +113,18 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
         else:
             return tuple(results)
 
+    def xpath(self, xml, *queries):
+        try:
+            xmlDoc = etree.parse(xml)
+        except etree.ParseError:
+            raise  # TODO
+        
+        results = [xmlDoc.xpath(query) for query in queries]
+
+        if len(results) == 1:
+            return results[0]
+        else:
+            return tuple(results)
 
 ###
 #   Retrieve summary per term
@@ -136,29 +148,51 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         """
         query_url = self.url % '*'
         xml = self.get_xml(query_url)
-        nodes, lit = self.xpath(xml, '//results/result', '//literatureSummary/@resultCount')
-        resource_data_dict = {}
-        nifid_count_total = {}
+        nodes, lit = self.xpath(xml, '//results/result', '//literatureSummary/@resultCount')  # FIXME these queries do need to go up top to make it easier to track and modify them as needed
 
-        # tuple order: db, indexable, total count ... NOTE db is the name
+        nifid_count_total, resource_data_dict = self._walk_nodes(nodes, 'db', 'indexable')
+
         resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature')
-        nifid_count_total[LITERATURE_ID] = int(lit[0].content)
+        nifid_count_total[LITERATURE_ID] = int(lit[0].text)
 
+        """
         for node in nodes:
-            if node.prop('nifId') not in resource_data_dict:  # cull dupes
-                nifId = node.prop('nifId')
-                db = node.prop('db')
-                indexable = node.prop('indexable')
-                putative_count = node.xpathEval('./count')
+            if node.get('nifId') not in resource_data_dict:  # cull dupes
+                nifId = node.get('nifId')
+                db = node.get('db')
+                indexable = node.get('indexable')
+                putative_count = node.xpath('./count')
                 if len(putative_count) > 1:
-                    print(term_id, name, [c.content for c in putative_count])
+                    print(TOTAL_TERM_ID, TOTAL_TERM_ID_NAME, [c.content for c in putative_count])
                     raise IndexError('too many counts!')
-                count = int(putative_count[0].content)
+                count = int(putative_count[0].text)
                 resource_data_dict[nifId] = db, indexable
                 nifid_count_total[nifId] = count
+        #"""
 
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict, nifid_count_total
+
+    def _walk_nodes(nodes, *keys):
+        """ always return counts, any extra vals goes their own dict """
+        resource_data_dict = {}
+        nifid_count_total = {}
+        for node in nodes:
+            if node.get('nifId') not in resource_data_dict:  # cull dupes
+                nifId = node.get('nifId')
+
+                putative_count = node.xpath('./count')
+                if len(putative_count) > 1:
+                    print(TOTAL_TERM_ID, TOTAL_TERM_ID_NAME, [c.content for c in putative_count])
+                    raise IndexError('too many counts!')  #FIXME we must handle this
+                count = int(putative_count[0].text)
+                nifid_count_total[nifId] = count
+
+                if keys:
+                    vals = tuple([node.get(key) for key in keys])
+                    resource_data_dict[nifId] = vals
+
+        return nifid_count, resource_data_dict if keys else nifid_count
 
     def get_counts(self, term):  #FIXME this really needs to be async or something
         """
@@ -171,26 +205,28 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
                                       '//literatureSummary/@resultCount')
 
+        #FIXME do we even need name anymore if we aren't dealing with ids in here?
         #TODO deal with names and empty nodes
-        name = name[0].content
+        name = name[0].text
         if name != term:
             raise TypeError('for some reason name != term: %s != %s'%(name, term))
 
+        """
         nifid_count = {}
 
-        #datasources
         for node in nodes:
-            if node.prop('nifId') not in nifid_count:  # cull dupes
-                nifId = node.prop('nifId')
-                putative_count = node.xpathEval('./count')
+            if node.get('nifId') not in nifid_count:
+                nifId = node.get('nifId')
+                putative_count = node.xpath('./count')
                 if len(putative_count) > 1:
-                    print(term_id, name, [c.content for c in putative_count])
-                    raise IndexError('too many counts!')
-                count = int(putative_count[0].content)
+                    print(term, name, [c.text for c in putative_count])
+                    raise IndexError('too many counts!')  # FIXME this must be handled
+                count = int(putative_count[0].text)
                 nifid_count[nifId] = count
-        
-        #literature
-        nifid_count[LITERATURE_ID] = int(lit[0].content)
+        #"""
+
+        nifid_count = self._walk_nodes(nodes)
+        nifid_count[LITERATURE_ID] = int(lit[0].text)
 
         return nifid_count
 
@@ -313,8 +349,8 @@ class heatmap_service(database_service):
         super().__init__()
         self.summary_server = summary_server
         self.term_server = term_server
-        self.term_count_dict = {TOTAL_TERM:{}}  # makes init play nice
-        self.term_names = {TOTAL_TERM:TOTAL_TERM_NAME}
+        self.term_count_dict = {TOTAL_TERM_ID:{}}  # makes init play nice
+        self.term_names = {TOTAL_TERM_ID:TOTAL_TERM_ID_NAME}
         self.resources = None
         self.check_counts()
         output_map = {
@@ -327,17 +363,17 @@ class heatmap_service(database_service):
             otherwise flag all existing terms as dirty
         """
         resources, nifid_count_total = self.summary_server.get_sources()
-        if len(nifid_count_total) != len(self.term_count_dict[TOTAL_TERM]):
+        if len(nifid_count_total) != len(self.term_count_dict[TOTAL_TERM_ID]):
             # the total number of sources has changed!
             self.resources = resources
             self.term_count_dict = {}  # reset the cache since new source
-            self.term_count_dict[TOTAL_TERM] = nifid_count_total
+            self.term_count_dict[TOTAL_TERM_ID] = nifid_count_total
             print("CACHE DIRTY")
         else:  # check for changes in values
-            for nifid, old_value in self.term_count_dict[TOTAL_TERM].items():
+            for nifid, old_value in self.term_count_dict[TOTAL_TERM_ID].items():
                 if nifid_count_total[nifid] != old_value:
                     self.term_count_dict = {}
-                    self.term_count_dict[TOTAL_TERM] = nifid_count_total
+                    self.term_count_dict[TOTAL_TERM_ID] = nifid_count_total
                     print("CACHE DIRTY")
                     break  # we already found a difference
 
@@ -371,7 +407,7 @@ class heatmap_service(database_service):
         if not term_id_order:
             term_id_order = sorted(hm_data) 
         if not src_id_order:
-            src_id_order = sorted(hm_data[TOTAL_TERM])
+            src_id_order = sorted(hm_data[TOTAL_TERM_ID])
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order)
 
     def get_term_counts(self, *terms):  #FIXME this fails if given an id!
@@ -381,7 +417,7 @@ class heatmap_service(database_service):
         """
         assert type(terms[0]) == str, "terms[0] has wrong type: %s" % terms
         # TODO do we want to deal with id/term overlap? (NO)
-        terms = tuple(set([TOTAL_TERM]+list(terms)))  #removes dupes
+        terms = tuple(set([TOTAL_TERM_ID]+list(terms)))  #removes dupes
         term_count_dict = {}
         failed_terms = []
         for term in terms:
@@ -442,7 +478,7 @@ class heatmap_service(database_service):
         """
         self.check_counts() #call to * to validate counts
         hm_data, fails = self.get_term_counts(*terms)  # call this internally to avoid race conds
-        terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM
+        terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM_ID
 
         if len(terms) < self.DOI_TERM_MIN:  #TODO need to pass error back out for the web
             print("We do not mint DOIS for heatmaps with less than %s terms."%self.DOI_TERM_MIN)
@@ -586,7 +622,7 @@ def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
         # be handled elsewhere
         embed()
         raise IndexError("Term orders must be subsets of the dict!")
-    if len(tdict_sdict[TOTAL_TERM]) != len(src_ids_order):  # these must match
+    if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_ids_order):  # these must match
         raise IndexError("Source orders must match the total source counts!")
 
     matrix = np.empty((len(term_ids_order), len(src_ids_order)))
@@ -632,18 +668,11 @@ def setup_db():
         conn.close()
 
 ###
-#   main
+#   Tests FIXME move this to another file
 ###
 
-def main():
-    #setup_db()
-    #return
-    ts = term_service()
-    ss = summary_service(ts)
-    os = ontology_service()
-    t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
-    r = "BFO_0000050"
-    j = os.get_terms(t, r)
+def test():
+    # need to restructure how we actually do tests
     test_dict = dict(
         test_base = (
             'brain',
@@ -681,6 +710,23 @@ def main():
             'cortex',
         ),
     )
+    return test_dict
+
+###
+#   main
+###
+
+
+def main():
+    #setup_db()
+    #return
+    ts = term_service()
+    ss = summary_service()
+    os = ontology_service()
+    t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
+    r = "BFO_0000050"
+    j = os.get_terms(t, r)
+    test_dict = test()
     try:
         hs = heatmap_service(ss, ts)
         for test_terms in test_dict.values():
