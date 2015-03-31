@@ -9,6 +9,8 @@
 
 """
 
+from functools import wraps
+
 import requests
 import psycopg2 as pg
 from psycopg2.extras import register_hstore
@@ -273,6 +275,8 @@ class database_service:  # FIXME reimplement with asyncio?
             cur.close()
 
         return 
+    
+    @sanitize_input
     def cursor_exec(self, SQL, args=None):
         cur = self.conn.cursor()
         if args:
@@ -306,7 +310,7 @@ class heatmap_service(database_service):
         self.summary_server = summary_server
         self.term_server = term_server
         self.term_count_dict = {TOTAL_TERM_ID:{}}  # makes init play nice
-        self.term_names = {TOTAL_TERM_ID:TOTAL_TERM_ID_NAME}
+        self.term_names = {TOTAL_TERM_ID:TOTAL_TERM_ID_NAME}  #FIXME these dicts may need to be ordered so we don't use too much memory
         self.resources = None
         self.check_counts()
         output_map = {
@@ -333,6 +337,7 @@ class heatmap_service(database_service):
                     print("CACHE DIRTY")
                     break  # we already found a difference
 
+    @sanitize_input
     def get_heatmap_from_id(self, hm_id):
         sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
                 JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
@@ -356,6 +361,7 @@ class heatmap_service(database_service):
         hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
         return hm_data
 
+    @sanitize_input
     def get_heatmap_from_doi(self, doi, term_id_order=None, src_id_order=None, output='json'):
         """ return default (alpha) ordereded heatmap or apply input orders
         """
@@ -428,6 +434,7 @@ class heatmap_service(database_service):
 
         return name_order
 
+    @sanitize_input
     def make_heatmap_data(self, *terms):  # FIXME error handling
         """ this call mints a heatmap and creates the prov record
             this is also where we will check to see if everything is up to date
@@ -527,10 +534,34 @@ class heatmap_service(database_service):
         doi = "THIS IS A FAKE DOI"
         return doi
 
-    def output_csv(self, heatmap_data, term_id_order, src_id_order):
-        """ consturct a csv file on the fly for download """
+    def output_csv(self, heatmap_data, term_id_order, src_id_order, sep=",", export_ids=True):
+        """ consturct a csv file on the fly for download response """
         #this needs access id->name mappings
         #pretty sure I already have this written?
+        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order)
+        term_names = self.get_names_from_ids(term_id_order)
+        src_names = self.get_names_from_ids(src_id_order)
+
+        if export_ids:
+            empty_col_str = sep * 2
+        else:
+            empty_col_str = sep * 1
+
+        csv_string = ""
+        csv_string += empty_col_str + sep.join(src_names) + "\n"
+        if export_ids:
+            csv_string += empty_col_str + sep.join(src_id_order) + "\n"
+
+        if export_ids:
+            for term_name, term_id, row in zip(term_names, term_id_order, matrix):
+                line = term_name + sep + term_id + sep + sep.join(str(i) for i in row) + "\n"
+                csv_string += line
+        else:
+            for term_name, row in zip(term_names, matrix):
+                line = term_name + sep + sep.join(str(i) for i in row) + "\n"
+                csv_string += line
+
+        return csv_string
 
     def output_json(self, heatmap_data):
         """ return a json object with the raw data and the src_id and term_id mappings """
@@ -543,6 +574,15 @@ class heatmap_service(database_service):
 ###
 #   utility functions  FIXME these should probably go elsewhere?
 ###
+
+def sanitize_input(function):
+    """ Right now this is just a reminder function to flag functions that
+        need to have their input sanitized since they are inserted into the sql
+    """
+    @wraps
+    def wrapped(*args, **kwargs):
+        return function(*args,**kwargs)
+        
 
 def f(*args, **kwargs):
     print("Take a peek at what this thing looks like.")
@@ -568,22 +608,24 @@ def apply_order(dict_, key_order):
             ordered.append(None)
     return  ordered
                         
-def dict_to_matrix(tdict_sdict, term_ids_order, src_ids_order):
+def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
     """ given heatmap data, and orders on sources and terms
         return a matrix representation
     """
     #sanity check
-    if len(tdict_sdict) < len(term_ids_order):  # term_ids can be a subset!
+    if len(tdict_sdict) < len(term_id_order):  # term_ids can be a subset!
         # note that we *could* allow empty terms in the dict but that should
         # be handled elsewhere
         embed()
         raise IndexError("Term orders must be subsets of the dict!")
-    if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_ids_order):  # these must match
+    if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_id_order):  # these must match
         raise IndexError("Source orders must match the total source counts!")
 
-    matrix = np.empty((len(term_ids_order), len(src_ids_order)))
-    for i, term in enumerate(term_ids_order):
-        matrix[i,:] = apply_order(hm_data[term], src_ids_order)
+    matrix = np.empty((len(term_id_order), len(src_id_order)))
+    for i, term in enumerate(term_id_order):
+        matrix[i,:] = apply_order(hm_data[term], src_id_order)
+
+    return matrix
 
 def setup_db():
     """ execute blocks of sql delimited by --words-- in the setup file
