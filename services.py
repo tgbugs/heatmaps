@@ -61,6 +61,17 @@ TOTAL_TERM_ID = 'federation_totals'  # FIXME we need to come up with a name for 
 TOTAL_TERM_ID_NAME = 'Totals'
 
 ###
+#   Decorators
+###
+def sanitize_input(function):
+    """ Right now this is just a reminder function to flag functions that
+        need to have their input sanitized since they are inserted into the sql
+    """
+    @wraps
+    def wrapped(*args, **kwargs):
+        return function(*args,**kwargs)
+
+###
 #   base class for getting XML from various servies
 ###
 
@@ -298,13 +309,13 @@ class heatmap_service(database_service):
 
         for the most part it is a lightweight wrapper on top of the summary
         service but it also manages the provenance for each heatmap generated
-        and can retrieve specific heatmaps by doi, user, and date
+        and can retrieve specific heatmaps by id or date
     """
     dbname = "heatmap_test"
     user = "heatmapuser"
     host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
-    DOI_TERM_MIN = 5
+    TERM_MIN = 5
     def __init__(self, summary_server, term_server):
         super().__init__()
         self.summary_server = summary_server
@@ -338,7 +349,7 @@ class heatmap_service(database_service):
                     break  # we already found a difference
 
     @sanitize_input
-    def get_heatmap_from_id(self, hm_id):
+    def get_heatmap_data_from_id(self, hm_id):
         sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
                 JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
                 JOIN term_history AS th ON th.id=junc.term_history_id
@@ -348,24 +359,11 @@ class heatmap_service(database_service):
         hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
         return hm_data
 
-    def get_heatmap_data_from_doi(self, doi):
-        # TODO user, date range too
-        #sql = "SELECT th.term, th.term_counts FROM heatmap_prov AS hp JOIN term_history AS th ON hp.id=th.heatmap_prov_id WHERE hp.doi=%s;"
-
-        sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
-                JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
-                JOIN term_history AS th ON th.id=junc.term_history_id
-                WHERE hp.doi=%s;"""
-        args = (doi,)
-        tuples = self.cursor_exec(sql, args)
-        hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
-        return hm_data
-
     @sanitize_input
-    def get_heatmap_from_doi(self, doi, term_id_order=None, src_id_order=None, output='json'):
+    def get_heatmap_from_id(self, hm_id, term_id_order=None, src_id_order=None, output='json'):
         """ return default (alpha) ordereded heatmap or apply input orders
         """
-        hm_data = self.get_heatmap_data_from_doi(doi)
+        hm_data = self.get_heatmap_data_from_id(hm_id)
         if not term_id_order:
             term_id_order = sorted(hm_data) 
         if not src_id_order:
@@ -443,8 +441,8 @@ class heatmap_service(database_service):
         hm_data, fails = self.get_term_counts(*terms)  # call this internally to avoid race conds
         terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM_ID
 
-        if len(terms) < self.DOI_TERM_MIN:  #TODO need to pass error back out for the web
-            print("We do not mint DOIS for heatmaps with less than %s terms."%self.DOI_TERM_MIN)
+        if len(terms) < self.TERM_MIN:  #TODO need to pass error back out for the web
+            print("We do not mint DOIS for heatmaps with less than %s terms."%self.TERM_MIN)
             return None, hm_data
 
         #check if we already have matching data in term_history
@@ -479,7 +477,7 @@ class heatmap_service(database_service):
 
             th_ids.append(th_id)
 
-        if len(th_ids) == len(terms):  #all terms identical get existing doi
+        if len(th_ids) == len(terms):  #all terms identical get existing id
             sql_hp_ids = ("SELECT DISTINCT heatmap_prov_id FROM"
             " heatmap_prov_to_term_history WHERE term_history_id IN %s")
             sql = ("SELECT DISTINCT heatmap_prov_id, term_history_id FROM"
@@ -491,27 +489,16 @@ class heatmap_service(database_service):
             # we need hit the newest hm_ids first in case 
             for (existing_hm_id,) in existing_hm_ids:
                 old_th_ids = [ti for hi, ti in existing_th_ids if hi == existing_hm_id]
-                if set(th_ids) == set(old_th_ids): #rows exist under a SINGLE doi
-                    sql_get_doi = "SELECT doi FROM heatmap_prov WHERE id=%s"
-                    args = (existing_hm_id,)
-                    existing_doi = self.cursor_exec(sql_get_doi, args)[0][0]
-                    print('Yes this heatmap already exists!')  # FIXME
-                    return existing_doi, hm_data
+                if set(th_ids) == set(old_th_ids): #rows exist under a SINGLE heatmap
+                    return existing_hm_id, hm_data
 
         #create a new record in heatmap_prov since we didn't find an existing record
-            #TODO we only want to do this if someone requests a term that is not in cache
-            #we probably don't want to stash the whole cache under a doi because could be vbig
             #reccomend that users request the terms they need a single time for download
             #OR we just rate limit the number of heatmaps that can be requested XXX <-this
-            #mint a new doi
-            #put that doi wherever it needs to go for resolver purposes
             #create the record
-            #XXX prov id
-        doi = self.make_doi()
-        sql_hp = "INSERT INTO heatmap_prov (doi) VALUES(%s);"
-        sql_hp_id = "SELECT MAX(id) from heatmap_prov"
-        args = (doi,)
-        self.cursor_exec(sql_hp, args)
+        sql_hp = "INSERT INTO heatmap_prov"  # just use the primary key in the url
+        sql_hp_id = "SELECT MAX(id) from heatmap_prov"  # ACID YEAH
+        self.cursor_exec(sql_hp)
         hp_result = self.cursor_exec(sql_hp_id)
         hp_id = hp_result[0][0]
 
@@ -526,13 +513,7 @@ class heatmap_service(database_service):
         #commit it (probably wrap this in a try/except)
         self.conn.commit()
 
-        return doi, hm_data  # TODO pull the datetime out
-
-    def make_doi(self):  # TODO
-        """ mint and register a new doi in all the right places """
-        #raise NotImplementedError("FIXME")
-        doi = "THIS IS A FAKE DOI"
-        return doi
+        return hp_id, hm_data  # TODO pull the datetime out
 
     def output_csv(self, heatmap_data, term_id_order, src_id_order, sep=",", export_ids=True):
         """ consturct a csv file on the fly for download response """
@@ -575,13 +556,6 @@ class heatmap_service(database_service):
 #   utility functions  FIXME these should probably go elsewhere?
 ###
 
-def sanitize_input(function):
-    """ Right now this is just a reminder function to flag functions that
-        need to have their input sanitized since they are inserted into the sql
-    """
-    @wraps
-    def wrapped(*args, **kwargs):
-        return function(*args,**kwargs)
         
 
 def f(*args, **kwargs):
@@ -627,6 +601,17 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
 
     return matrix
 
+class conncur:
+    def __init__(self, *args, **kwargs):
+        self.conn = pg.connect(*args, **kwargs)
+        self.cur = self.conn.cursor()
+    def __enter__(self):
+        return self.conn, self.cur
+    def __exit__(self, type, value, traceback):
+        self.cur.close()
+        self.conn.close()
+
+
 def setup_db():
     """ execute blocks of sql delimited by --words-- in the setup file
         first 4 blocks do user and database setup
@@ -636,10 +621,8 @@ def setup_db():
         lines = [' '+l.rstrip('\n').strip(' ') for l in f.readlines()]
     text = ''.join(lines)
     sql_blocks = [l.strip(' ') for l in text.split('--')][::2][1:]  #user, alter user, drop, db, tables, alter
-    try:
-        conn = pg.connect(dbname='postgres',user='postgres', host='localhost', port=5432)
-        cur = conn.cursor()
 
+    with conncur(dbname='postgres',user='postgres', host='localhost', port=5432) as (conn, cur):
         for sql in sql_blocks[:4]:
             print(sql)
             if sql.startswith('DROP DATABASE') or sql.startswith('CREATE DATABASE') :
@@ -650,20 +633,17 @@ def setup_db():
             else:
                 cur.execute(sql)
                 conn.commit()
-        cur.close()
-        conn.close()
 
-        conn = pg.connect(dbname='heatmap_test',user='postgres', host='localhost', port=5432)
-        cur = conn.cursor()
-        for sql in sql_blocks[4:7]:
+    with conncur(dbname='heatmap_test',user='postgres', host='localhost', port=5432) as (conn, cur):
+        sql = sql_blocks[4]
+        cur.execute(sql)
+        conn.commit()
+
+    with conncur(dbname='heatmap_test',user='heatmapuser', host='localhost', port=5432) as (conn, cur):
+        for sql in sql_blocks[5:8]:
             print(sql)
             cur.execute(sql)
             conn.commit()
-    except:
-        raise
-    finally:
-        cur.close()
-        conn.close()
 
 ###
 #   Tests FIXME move this to another file
@@ -716,8 +696,8 @@ def test():
 
 
 def main():
-    #setup_db()
-    #return
+    setup_db()
+    return
     ts = term_service()
     ss = summary_service()
     os = ontology_service()
