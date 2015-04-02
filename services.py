@@ -88,6 +88,20 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
         instance = super().__new__(cls)
         return instance
 
+    def get(self, url, response_type):
+        response = requests.get(url, timeout=self._timeout)
+        if response.ok:
+            if response_type == 'xml':
+                return response.text
+            elif response_type == 'json':
+                return response.json()
+            else:
+                return response.text
+        else:
+            raise ConnectionError("Get failed %s %s"%(response.status_code, response.reason))
+
+
+
     def get_xml(self, url):
         """ returns the raw xml for parsining """
         response = requests.get(url, timeout=self._timeout)
@@ -95,10 +109,9 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
             self._xml_cache[url] = response.text
 
         if response.ok:
-            
             return response.text
         else:
-            raise IOError("Get failed %s %s"%(response.status_code, response.reason))
+            raise ConnectionError("Get failed %s %s"%(response.status_code, response.reason))
 
     def get_json(self, url):  #FIXME we should be able to be smart about this
         """ returns a dict/list combo structure for the json """
@@ -106,7 +119,7 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
         if response.ok:
             return response.json()
         else:
-            raise IOError("Get failed %s %s"%(response.status_code, response.reason))
+            raise ConnectionError("Get failed %s %s"%(response.status_code, response.reason))
 
     def xpath(self, xml, *queries):
         """ Run a set of xpath queries. """
@@ -166,7 +179,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
             check results against cm, but be aware that 
         """
         query_url = self.url % '*'
-        xml = self.get_xml(query_url)
+        xml = self.get(query_url, 'xml')
         nodes, lit = self.xpath(xml, '//results/result', '//literatureSummary/@resultCount')  # FIXME these queries do need to go up top to make it easier to track and modify them as needed
 
         nifid_count_total, resource_data_dict = self._walk_nodes(nodes, 'db', 'indexable')
@@ -184,7 +197,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
             IDS ARE NOT HANDLED HERE
         """
         query_url = self.url % term
-        xml = self.get_xml(query_url)
+        xml = self.get(query_url, 'xml')
         nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
                                       '//literatureSummary/@resultCount')
 
@@ -211,12 +224,17 @@ class term_service(rest_service):
     _timeout = 2
 
     def get_id(self, term):
+        #term = term.replace(' ','%20')  # FIXME
         query_url = self.url % term
-        records = self.get_json(query_url)['concepts']
+        try:
+            records = self.get(query_url, 'json')['concepts']
+        except ConnectionError:
+            print(query_url)
+            return None
         if len(records) == 1:
             return records[0]['fragment']
         else:
-            return None
+            return records
 
 ###
 #   Ontology services
@@ -227,7 +245,7 @@ class ontology_service(rest_service):
     _timeout = 10
     def get_terms(self, term_id, relationship):
         query_url = self.url % (term_id, relationship)
-        records = self.get_json(query_url)
+        records = self.get(query_url, 'json')
         names = []
         for rec in records['edges']:
             if term_id in rec.values():
