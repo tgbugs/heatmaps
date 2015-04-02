@@ -67,9 +67,10 @@ def sanitize_input(function):
     """ Right now this is just a reminder function to flag functions that
         need to have their input sanitized since they are inserted into the sql
     """
-    @wraps
+    @wraps(function)
     def wrapped(*args, **kwargs):
         return function(*args,**kwargs)
+    return wrapped
 
 ###
 #   base class for getting XML from various servies
@@ -349,7 +350,7 @@ class heatmap_service(database_service):
                     break  # we already found a difference
 
     @sanitize_input
-    def get_heatmap_data_from_id(self, hm_id):
+    def get_heatmap_data_from_id(self, hm_id):  # TODO timestampt
         sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
                 JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
                 JOIN term_history AS th ON th.id=junc.term_history_id
@@ -389,7 +390,7 @@ class heatmap_service(database_service):
                     nifid_count = self.summary_server.get_counts(term)
                     self.term_count_dict[term] = nifid_count
                 except requests.exceptions.ReadTimeout:
-                    failed_terms.apppend(term)
+                    failed_terms.append(term)
                     continue  # drop the term from the results
 
             term_count_dict[term] = nifid_count
@@ -459,8 +460,7 @@ class heatmap_service(database_service):
         newest_term_counts = {term:(th_id, int_cast(nifid_count)) for
                               th_id, term, nifid_count in check_result}
 
-        sql_ins_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s);"
-        sql_th_id = "SELECT MAX(id) from term_history"
+        sql_ins_term = "INSERT INTO term_history (term, term_counts) VALUES(%s,%s) RETURNING id;"
         th_ids = []
         for term, new_nifid_count in hm_data.items():  # validate terms counts
             try:
@@ -471,8 +471,7 @@ class heatmap_service(database_service):
 
             if new_nifid_count != old_nifid_count:  # we cant reuse counts
                 ins_args = (term, str_cast(hm_data[term]))
-                self.cursor_exec(sql_ins_term, ins_args)
-                ti_result = self.cursor_exec(sql_th_id)
+                ti_result = self.cursor_exec(sql_ins_term, ins_args)
                 th_id = ti_result[0][0]
 
             th_ids.append(th_id)
@@ -490,17 +489,19 @@ class heatmap_service(database_service):
             for (existing_hm_id,) in existing_hm_ids:
                 old_th_ids = [ti for hi, ti in existing_th_ids if hi == existing_hm_id]
                 if set(th_ids) == set(old_th_ids): #rows exist under a SINGLE heatmap
-                    return existing_hm_id, hm_data
+                    sql = "SELECT DateTime FROM heatmap_prov WHERE id=%s" 
+                    args = (existing_hm_id,)
+                    timestamp = self.cursor_exec(sql, args)
+                    return hm_data, existing_hm_id, timestamp
 
         #create a new record in heatmap_prov since we didn't find an existing record
             #reccomend that users request the terms they need a single time for download
             #OR we just rate limit the number of heatmaps that can be requested XXX <-this
             #create the record
-        sql_hp = "INSERT INTO heatmap_prov"  # just use the primary key in the url
-        sql_hp_id = "SELECT MAX(id) from heatmap_prov"  # ACID YEAH
-        self.cursor_exec(sql_hp)
-        hp_result = self.cursor_exec(sql_hp_id)
-        hp_id = hp_result[0][0]
+        sql_hp = "INSERT INTO heatmap_prov DEFAULT VALUES RETURNING id, DateTime"  # just use the primary key in the url
+        print(sql_hp)
+        [(hp_id, timestamp)] = self.cursor_exec(sql_hp)
+        #hp_id = hp_result[0][0]
 
         #insert into heatmap_prov_to_term_history
             #XXX prov id #XXX history id pairs
@@ -513,7 +514,7 @@ class heatmap_service(database_service):
         #commit it (probably wrap this in a try/except)
         self.conn.commit()
 
-        return hp_id, hm_data  # TODO pull the datetime out
+        return hm_data, hp_id, timestamp
 
     def output_csv(self, heatmap_data, term_id_order, src_id_order, sep=",", export_ids=True):
         """ consturct a csv file on the fly for download response """
@@ -639,7 +640,7 @@ def setup_db():
         cur.execute(sql)
         conn.commit()
 
-    with conncur(dbname='heatmap_test',user='heatmapuser', host='localhost', port=5432) as (conn, cur):
+    with conncur(dbname='heatmap_test',user='heatmapadmin', host='localhost', port=5432) as (conn, cur):
         for sql in sql_blocks[5:8]:
             print(sql)
             cur.execute(sql)
@@ -697,7 +698,7 @@ def test():
 
 def main():
     setup_db()
-    return
+    #return
     ts = term_service()
     ss = summary_service()
     os = ontology_service()
