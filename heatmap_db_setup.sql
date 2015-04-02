@@ -17,7 +17,7 @@ $body$
 
 -- 1 do alter role /*postgres postgres*/--
 ALTER ROLE heatmapadmin SET search_path = heatmap, public;
-ALTER ROLE heatmapuser SET search_path = heatmap;
+ALTER ROLE heatmapuser SET search_path = heatmap, public;
 
 -- 2 drop db must be done alone /*postgres postgres*/--
 DROP DATABASE IF EXISTS heatmap_test; /*should DROP TABLE for testing*/
@@ -33,15 +33,14 @@ CREATE DATABASE heatmap_test
     CONNECTION LIMIT = -1;
 
 -- 4 do db settings, schema /*postgres heatmap_test*/--
-/*GRANT SELECT, INSERT ON DATABASE heatmap_test TO heatmapuser;*/
 
 CREATE EXTENSION hstore;  /*keep this on public so heatmapuser cant bolox everything*/
 
 -- 5 create schemas and tables /*heatmapadmin heatmap_test*/--
-CREATE SCHEMA heatmap
-    AUTHORIZATION heatmapadmin;
-
-GRANT SELECT, INSERT ON SCHEMA heatmap TO heatmapuser;
+GRANT CONNECT ON DATABASE heatmap_test TO heatmapuser;
+CREATE SCHEMA heatmap;
+GRANT USAGE ON SCHEMA heatmap TO heatmapuser;
+    /*AUTHORIZATION heatmapadmin;*/
 
 -- 6 create tables /*heatmapadmin heatmap_test*/--
 
@@ -70,10 +69,10 @@ CREATE TABLE heatmap_prov_to_term_history(  /* we need this for the many-many ma
         REFERENCES term_history (id) MATCH SIMPLE
         ON UPDATE NO ACTION ON DELETE NO ACTION
 );
--- 7 triggers /**/--
-CREATE TRIGGER trig_heatmap_prov_timero BEFORE UPDATE
-ON heatmap_prov
-RAISE EXCEPTION
+
+-- 7 grant select and insert for the user on the new tables /*heatmapadmin heatmap_test*/--
+GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA heatmap TO heatmapuser;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA heatmap TO heatmapuser;
 
 -- 8 do alters, redundant if run as heatmapuser /*heatmapadmin heatmap_test*/--
 ALTER TABLE heatmap_prov OWNER TO heatmapadmin;
