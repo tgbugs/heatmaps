@@ -1,4 +1,4 @@
--- 0 create user--
+-- 0 create user-- /*postgres postgres*/
 DO
 $body$
 BEGIN
@@ -7,42 +7,47 @@ BEGIN
         CREATE ROLE heatmapuser LOGIN
         NOSUPERUSER INHERIT NOCREATEDB NOCREATEROLE;
     END IF;
+    IF NOT EXISTS ( SELECT * FROM pg_catalog.pg_user
+        WHERE usename = 'heatmapadmin') THEN
+        CREATE ROLE heatmapadmin LOGIN
+        NOSUPERUSER INHERIT NOCREATEDB NOCREATEROLE;
+    END IF;
 END;
 $body$
 
--- 1 do alter role--
+-- 1 do alter role /*postgres postgres*/--
+ALTER ROLE heatmapadmin SET search_path = heatmap, public;
 ALTER ROLE heatmapuser SET search_path = heatmap;
 
--- 2 drop db must be done alone--
-DROP DATABASE IF EXISTS heatmap_test;
+-- 2 drop db must be done alone /*postgres postgres*/--
+DROP DATABASE IF EXISTS heatmap_test; /*should DROP TABLE for testing*/
 
--- 3 create db must be done alone--
+-- 3 create db must be done alone /*postgres postgres*/--
 CREATE DATABASE heatmap_test
-    WITH OWNER = heatmapuser
+    WITH OWNER = heatmapadmin
     ENCODING = 'UTF8'
     TABLESPACE = pg_default
-    LC_COLLATE = 'en_US.UTF-8' /* NOTE these are broken on windows */
-    LC_CTYPE = 'en_US.UTF-8'
+    /* NOTE the LC are broken on windows */
+    /*LC_COLLATE = 'en_US.UTF-8'
+    LC_CTYPE = 'en_US.UTF-8'*/
     CONNECTION LIMIT = -1;
 
--- 4 do db settings, schema-- /*now connect to the database and make some tables*/
+-- 4 do db settings, schema /*postgres heatmap_test*/--
+/*GRANT SELECT, INSERT ON DATABASE heatmap_test TO heatmapuser;*/
 
-GRANT ALL ON DATABASE heatmap_test TO heatmapuser;
+CREATE EXTENSION hstore;  /*keep this on public so heatmapuser cant bolox everything*/
 
+-- 5 create schemas and tables /*heatmapadmin heatmap_test*/--
 CREATE SCHEMA heatmap
-    AUTHORIZATION heatmapuser;
+    AUTHORIZATION heatmapadmin;
 
-GRANT ALL ON SCHEMA heatmap TO heatmapuser;
+GRANT SELECT, INSERT ON SCHEMA heatmap TO heatmapuser;
 
-
--- 5 create tables--
-CREATE EXTENSION hstore SCHEMA heatmap;
-
-SET SCHEMA 'heatmap';
+-- 6 create tables /*heatmapadmin heatmap_test*/--
 
 CREATE TABLE heatmap_prov(
     id serial NOT NULL,
-    doi text,
+    /*doi text, */ /* just use the primary key and don't fiddle */
     /*requesting_person text,  *//* ARGH THE DESIRE TO NORMALIZE we can do this with the dois later if we really want to, RI is not critical*/
     "DateTime" timestamp default CURRENT_TIMESTAMP,  /*enforce this in the db*/
     CONSTRAINT heatmap_prov_pkey PRIMARY KEY (id)
@@ -60,16 +65,21 @@ CREATE TABLE heatmap_prov_to_term_history(  /* we need this for the many-many ma
     term_history_id integer,
     CONSTRAINT heatmap_prov_id_fkey FOREIGN KEY (heatmap_prov_id)
         REFERENCES heatmap_prov (id) MATCH SIMPLE
-        ON UPDATE NO ACTION ON DELETE NO ACTION, /* we should never be deleting from these...*/
+        ON UPDATE NO ACTION ON DELETE NO ACTION, /*we should never be deleting from these?*/
     CONSTRAINT term_history_id_fkey FOREIGN KEY (term_history_id)
         REFERENCES term_history (id) MATCH SIMPLE
         ON UPDATE NO ACTION ON DELETE NO ACTION
 );
+-- 7 triggers /**/--
+CREATE TRIGGER trig_heatmap_prov_timero BEFORE UPDATE
+ON heatmap_prov
+RAISE EXCEPTION
 
--- 6 do alters--
-ALTER TABLE heatmap_prov OWNER TO heatmapuser;
-ALTER TABLE term_history OWNER TO heatmapuser;
-ALTER TABLE heatmap_prov_to_term_history OWNER TO heatmapuser;
+-- 8 do alters, redundant if run as heatmapuser /*heatmapadmin heatmap_test*/--
+ALTER TABLE heatmap_prov OWNER TO heatmapadmin;
+ALTER TABLE term_history OWNER TO heatmapadmin;
+ALTER TABLE heatmap_prov_to_term_history OWNER TO heatmapadmin;
+
 --
 
 /* We don't need this table :)
