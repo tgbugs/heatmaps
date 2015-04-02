@@ -37,7 +37,6 @@ class Templated:
     def render(self):
         return self.render_call(self.TEMPLATE, **self.render_kwargs)
 
-
 class Form(Templated):  # FIXME separate callbacks? nah?
 
     TEMPLATE = """
@@ -83,10 +82,11 @@ base_url = "localhost:5000"
 base_ext = "/servicesv1/"
 hmext = base_ext + "heatmap/"
 
-def HMDOI(name):
+def HMID(name):
     #validate doi consider the alternative to not present the doi directly via our web interface?
-    #doi = ??
-    #hm_data = hs.get_heatmap_data_from_doi(doi)
+    try:
+        hm_id = int(request.for[name])
+    #hm_data = hs.get_heatmap_data_from_id(hm_id)
     #return hs.output_csv(hm_data)
     return request.form[name]
 
@@ -97,9 +97,9 @@ def TERMFILE(name):
     return request.files[name]
 
 terms_form = Form("NIF heatmaps from terms",
-                    ("Heatmap DOI","Term list", "Term file"),
+                    ("Heatmap ID (int)","Term list", "Term file"),
                     ('text','text','file'),
-                    (HMDOI, TERMLIST, TERMFILE))
+                    (HMID, TERMLIST, TERMFILE))
 
 @hmapp.route(hmext + "terms", methods = ['GET','POST'])
 def hm_terms():
