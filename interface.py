@@ -13,6 +13,16 @@ from IPython import embed  #FIXME
 ###
 #   Templates (FIXME extract)
 ###
+
+class Templated:
+    TEMPLATE = ""
+    def __init__(self, render_kwargs, render_call=render_template_string):
+        self.render_kwargs = render_kwargs
+        self.render_call = render_call
+
+    def render(self):
+        return self.render_call(self.TEMPLATE, **self.render_kwargs)
+
 class FormField:
     def __init__(self, title, type_, callback):
         self.title = title
@@ -27,15 +37,6 @@ class FormField:
     def factory(titles, types, callbacks):
         """ form field factory """
         return [FormField(title, type_, callback) for title, type_, callback in zip(titles, types, callbacks)]
-
-class Templated:
-    TEMPLATE = ""
-    def __init__(self, render_kwargs, render_call=render_template_string):
-        self.render_kwargs = render_kwargs
-        self.render_call = render_call
-
-    def render(self):
-        return self.render_call(self.TEMPLATE, **self.render_kwargs)
 
 class Form(Templated):  # FIXME separate callbacks? nah?
 
@@ -85,10 +86,12 @@ hmext = base_ext + "heatmap/"
 def HMID(name):
     #validate doi consider the alternative to not present the doi directly via our web interface?
     try:
-        hm_id = int(request.for[name])
-    #hm_data = hs.get_heatmap_data_from_id(hm_id)
-    #return hs.output_csv(hm_data)
-    return request.form[name]
+        hm_id = int(request.form[name])
+    except:
+        raise
+    hm_data = hs.get_heatmap_data_from_id(hm_id)
+    return hs.output_csv(hm_data)
+    #return request.form[name]
 
 def TERMLIST(name):
     return request.form[name]
