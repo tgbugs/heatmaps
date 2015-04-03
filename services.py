@@ -20,6 +20,8 @@ import numpy as np
 
 from IPython import embed
 
+ConnectionError = BaseException  # old python >_<
+
 """
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
 1,
@@ -218,9 +220,10 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 #   Map terms to ids  FIXME we need some way to resolve multiple mappings to ids ;_;
 ###
 
-class term_service(rest_service):
+class term_service(rest_service):  # FURL PLS
     """ let us try this with json: result--works pretty well """
     url = SCIGRAPH + "/scigraph/vocabulary/term/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
+    name_url = SCIGRAPH + "/scigraph/vocabulary/id/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
     _timeout = 2
 
     def get_id(self, term):
@@ -235,6 +238,22 @@ class term_service(rest_service):
             return records[0]['fragment']
         else:
             return records
+
+    def get_name(self, tid):
+        query_url = self.name_url % tid
+        try:
+            records = self.get(query_url, 'json')['concepts']
+        except ConnectionError:
+            print(query_url)
+            return None
+        if len(records) != 1:
+            # we probably encountered a term being used as an id :/
+            #raise BaseException('what is this i dont even')
+            return tid
+        else:
+            return records[0]['labels']
+
+
 
 ###
 #   Ontology services
@@ -375,8 +394,19 @@ class heatmap_service(database_service):
                 WHERE hp.id=%s;"""
         args = (hm_id,)
         tuples = self.cursor_exec(sql, args)
-        hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
-        return hm_data
+        if tuples:
+            hm_data = {term:int_cast(nifid_count) for term, nifid_count in tuples}
+            return hm_data
+        else:
+            return None # no id was found
+
+    def gen_hm_data_id(self, hm_id):
+        sql = """SELECT th.term, th.term_counts FROM heatmap_prov_to_term_history AS junc
+                JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
+                JOIN term_history AS th ON th.id=junc.term_history_id
+                WHERE hp.id=%s;"""
+        args = (hm_id,)
+        #yield from self.cursor_exec(sql, args)
 
     @sanitize_input
     def get_heatmap_from_id(self, hm_id, term_id_order=None, src_id_order=None, output='json'):
@@ -445,9 +475,9 @@ class heatmap_service(database_service):
             for term_id in id_order:
                 name = self.term_server.get_name(term_id)  #FIXME we should keep a cache of this
                 if name:
-                    names.append(name)
+                    name_order.append(name)
                 else:  # term_id isnt a term_id, so probably already a name
-                    names.append(term_id)
+                    name_order.append(term_id)
 
         return name_order
 
@@ -598,7 +628,7 @@ def apply_order(dict_, key_order):
         try:
             ordered.append(dict_[key])
         except KeyError:
-            ordered.append(None)
+            ordered.append(None)  # convert to zero later for numerical
     return  ordered
                         
 def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
@@ -616,9 +646,10 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
 
     matrix = np.empty((len(term_id_order), len(src_id_order)))
     for i, term in enumerate(term_id_order):
-        matrix[i,:] = apply_order(hm_data[term], src_id_order)
+        row = apply_order(tdict_sdict[term], src_id_order)
+        matrix[i,:] = row
 
-    return matrix
+    return np.nan_to_num(matrix)
 
 class conncur:
     def __init__(self, *args, **kwargs):
@@ -734,7 +765,6 @@ def main():
         raise
     finally:
         hs.__exit__(None,None,None)
-
 
 
 if __name__ == '__main__':

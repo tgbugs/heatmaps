@@ -5,10 +5,10 @@
 
 # TODO do we need prov for generating lists of terms from the ontology?
 
-from flask import Flask, url_for, request, render_template, render_template_string
+from flask import Flask, url_for, request, render_template, render_template_string, make_response
 from IPython import embed  #FIXME
 
-###from services import *
+from services import heatmap_service, summary_service, term_service
 
 ###
 #   Templates (FIXME extract)
@@ -65,7 +65,10 @@ class Form(Templated):  # FIXME separate callbacks? nah?
             for field in self.fields:
                 out = field.callback()
                 if out:
-                    return self.render() + "<br>" + out
+                    if type(out) == str:  #FIXME all callbacks need to return a response object or nothing
+                        return self.render() + "<br>" + out
+                    else:
+                        return out
                     #return "Did this work?"
             return self.render()  # so that we don't accidentally return None
         else:
@@ -74,23 +77,32 @@ class Form(Templated):  # FIXME separate callbacks? nah?
                 return "WUT"
 
 
-###hmserv = heatmap_service(summary_service(), term_service())  # mmm nasty singletons
+hmserv = heatmap_service(summary_service(), term_service())  # mmm nasty singletons
 
 hmapp = Flask("heatmap service")
 
 base_url = "http://nif-services.neuinfo.org"
 base_url = "localhost:5000"
-base_ext = "/servicesv1/"
+base_ext = "/servicesv1/v1/"
 hmext = base_ext + "heatmap/"
 
 def HMID(name):
     #validate doi consider the alternative to not present the doi directly via our web interface?
     try:
         hm_id = int(request.form[name])
+    except ValueError:  # FIXME error handling should NOT be written in here?
+        return None
     except:
         raise
-    hm_data = hs.get_heatmap_data_from_id(hm_id)
-    return hs.output_csv(hm_data)
+    hm_data = hmserv.get_heatmap_data_from_id(hm_id)
+    if hm_data:
+        out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))
+        response = make_response(out)  #FIXME get ur types straight
+        response.headers['Content-Disposition '] = "attachment; filename = data.csv"
+        response.mimetype = 'text/csv'
+        return response
+    else:
+        return "No heatmap with id %s." % hm_id  #FIXME TYPES!!!
     #return request.form[name]
 
 def TERMLIST(name):
@@ -100,7 +112,7 @@ def TERMFILE(name):
     return request.files[name]
 
 terms_form = Form("NIF heatmaps from terms",
-                    ("Heatmap ID (int)","Term list", "Term file"),
+                    ("Heatmap ID (int)","Term list", "Term file"),  #TODO select!
                     ('text','text','file'),
                     (HMID, TERMLIST, TERMFILE))
 
@@ -144,7 +156,7 @@ def terms_POST():
         return repr(term_list)
     else:
         return None
-    ###hm_data, fails = hmserv.get_term_counts(*terms)
+    hm_data, fails = hmserv.get_term_counts(*terms)
     ###return repr(hm_data) + "\n\n" + str(fails)
     #return repr(terms)
 
