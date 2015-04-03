@@ -239,6 +239,15 @@ class term_service(rest_service):  # FURL PLS
         else:
             return records
 
+    def get_iri(self, tid):
+        query_url = self.name_url % tid
+        try:
+            records = self.get(query_url, 'json')['concepts']
+        except ConnectionError:
+            print(query_url)
+            return None
+        return records[0]['uri']
+
     def get_name(self, tid):
         query_url = self.name_url % tid
         try:
