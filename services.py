@@ -20,8 +20,6 @@ import numpy as np
 
 from IPython import embed
 
-ConnectionError = BaseException  # old python >_<
-
 """
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
 1,
@@ -252,7 +250,7 @@ class term_service(rest_service):  # FURL PLS
         return records
 
     def get_term_record(self, term):
-        query_url = self.url % tid
+        query_url = self.url % term
         try:
             records = self.get(query_url, 'json')['concepts']
         except ConnectionError:
