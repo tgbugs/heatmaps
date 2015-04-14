@@ -102,27 +102,6 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
         else:
             raise ConnectionError("Get failed %s %s"%(response.status_code, response.reason))
 
-
-
-    def get_xml(self, url):
-        """ returns the raw xml for parsining """
-        response = requests.get(url, timeout=self._timeout)
-        if self._cache_xml:
-            self._xml_cache[url] = response.text
-
-        if response.ok:
-            return response.text
-        else:
-            raise ConnectionError("Get failed %s %s"%(response.status_code, response.reason))
-
-    def get_json(self, url):  #FIXME we should be able to be smart about this
-        """ returns a dict/list combo structure for the json """
-        response = requests.get(url, timeout=self._timeout)
-        if response.ok:
-            return response.json()
-        else:
-            raise ConnectionError("Get failed %s %s"%(response.status_code, response.reason))
-
     def xpath(self, xml, *queries):
         """ Run a set of xpath queries. """
         try:
@@ -136,6 +115,7 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
             return results[0]
         else:
             return tuple(results)
+
 
 ###
 #   Retrieve summary per term
@@ -261,6 +241,25 @@ class term_service(rest_service):  # FURL PLS
             return tid
         else:
             return records[0]['labels']
+
+    def get_id_record(self, tid):
+        query_url = self.name_url % tid
+        try:
+            records = self.get(query_url, 'json')['concepts']
+        except ConnectionError:
+            print(query_url)
+            return None
+        return records
+
+    def get_term_record(self, term):
+        query_url = self.url % tid
+        try:
+            records = self.get(query_url, 'json')['concepts']
+        except ConnectionError:
+            print(query_url)
+            return None
+        return records
+
 
 
 
