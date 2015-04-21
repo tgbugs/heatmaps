@@ -13,7 +13,9 @@ setup(
     keywords='rest nif',
     #packages
     install_requires=[
+        'docopt',
         'lxml',
+        'numpy',
         'psycopg2',
         'requests',
         'ipython',
