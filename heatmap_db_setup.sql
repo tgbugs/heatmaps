@@ -38,7 +38,7 @@ CREATE EXTENSION hstore;  /*keep this on public so heatmapuser cant bolox everyt
 
 -- 5 create schemas and tables /*heatmapadmin heatmap_test*/--
 GRANT CONNECT ON DATABASE heatmap_test TO heatmapuser;
-CREATE SCHEMA heatmap;
+CREATE SCHEMA IF NOT EXISTS heatmap;
 GRANT USAGE ON SCHEMA heatmap TO heatmapuser;
     /*AUTHORIZATION heatmapadmin;*/
 
