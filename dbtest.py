@@ -1,3 +1,5 @@
+from services import heatmap_service, summary_service, term_service
+
 def test(heatmap_service):
     # need to restructure how we actually do tests
     test_dict = dict(
@@ -39,7 +41,9 @@ def test(heatmap_service):
     )
 
     try:
-        hs = heatmap_service
+        ss = summary_service()
+        ts = term_service()
+        hs = heatmap_service(ss, ts)
         for test_terms in test_dict.values():
             hs.get_term_counts(*test_terms)
             hs.make_heatmap_data(*test_terms)
@@ -47,7 +51,7 @@ def test(heatmap_service):
     except:
         raise
     finally:
-        hs.__exit__(None,None,None)
+        hs.__exit__(hs,None,None,None)
 
 
 
