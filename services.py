@@ -98,7 +98,7 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
             else:
                 return response.text
         else:
-            raise ConnectionError("Get failed %s %s"%(response.status_code, response.reason))
+            raise ConnectionError("Get of %s failed %s %s"%(url, response.status_code, response.reason))
 
     def xpath(self, xml, *queries):
         """ Run a set of xpath queries. """
@@ -266,7 +266,7 @@ class term_service(rest_service):  # FURL PLS
 ###
 
 class ontology_service(rest_service):
-    url = SCIGRAPH + "/scigraph/graph/neighbors/%s.json?depth=10&blankNodes=false&relationshipType=%s&direction=in"
+    url = SCIGRAPH + "/scigraph/graph/neighbors/%s.json?depth=10&blankNodes=false&relationshipType=%s&direction=INCOMING"
     _timeout = 10
     def get_terms(self, term_id, relationship):
         query_url = self.url % (term_id, relationship)
@@ -671,11 +671,13 @@ def main():
     r = "BFO_0000050"
     j = os.get_terms(t, r)
     test_dict = test()
+    do_test = True
     try:
         hs = heatmap_service(ss, ts)
-        for test_terms in test_dict.values():
-            hs.get_term_counts(*test_terms)
-            hs.make_heatmap_data(*test_terms)
+        if do_test:
+            for test_terms in test_dict.values():
+                hs.get_term_counts(*test_terms)
+                hs.make_heatmap_data(*test_terms)
         embed()
     except:
         raise
