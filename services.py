@@ -73,7 +73,7 @@ def sanitize_input(function):
     return wrapped
 
 ###
-#   base class for getting XML from various servies
+#   base class for getting XML or json from various servies
 ###
 
 class rest_service:  #TODO this REALLY needs to be async... with max timeout "couldnt do x terms"
@@ -657,50 +657,6 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
 
     return np.nan_to_num(matrix)
 
-###
-#   Tests FIXME move this to another file
-###
-
-def test():
-    # need to restructure how we actually do tests
-    test_dict = dict(
-        test_base = (
-            'brain',
-            'forebrain',
-            'midbrain',
-
-            'hindbrain',
-            'hippocampus',
-            'hypothalamus',
-        ),
-        test_subset = (
-            'forebrain',
-            'midbrain',
-            'hindbrain',
-
-            'hippocampus',
-            'hypothalamus',
-        ),
-        test_set_2 = (
-            'thalamus',
-            'superior colliculus',
-            'inferior olive',
-
-            'pons',
-            'cerebellum',
-            'cortex',
-        ),
-        test_overlap = (
-            'forebrain',
-            'midbrain',
-            'hindbrain',
-
-            'pons',
-            'cerebellum',
-            'cortex',
-        ),
-    )
-    return test_dict
 
 ###
 #   main

@@ -2,6 +2,8 @@ Python for acquiring data to make heatmaps and actually making them.
 
 ## Setup steps
 
+0. install postgres devlibs (postgresql-devel)
+0. install libxml2 devlibs (libxml2-devel, libxslt-devel)
 1. install distro python
 2. install virtualenv
 3. install the exact version of the interpreter you need
@@ -12,4 +14,6 @@ to use the exact interpreter version located at bin/pyenv
 pyvenv from the desired interp
 7. ```git clone https://github.com/tgbugs/heatmaps.git```
 8. ```source venv/bin/activate```
-8. ```python ```  NOTE: this will change if this is released as a package for pip
+9. ```cd heatmaps; python setup.py install```  NOTE: needs work
+0. ```python dbsetup.py```
+
