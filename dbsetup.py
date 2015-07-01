@@ -1,5 +1,7 @@
 import psycopg2 as pg
 
+host = '127.0.0.1'
+
 class conncur:
     def __init__(self, *args, **kwargs):
         self.conn = pg.connect(*args, **kwargs)
@@ -22,7 +24,7 @@ def setup_db(create=False):
     sql_blocks = [l.strip(' ') for l in text.split('--')][::2][1:]  #user, alter user, drop, db, tables, alter
 
     if create:
-        with conncur(dbname='postgres',user='postgres', host='localhost', port=5432) as (conn, cur):
+        with conncur(dbname='postgres',user='postgres', host='127.0.0.1', port=5432) as (conn, cur):
             for sql in sql_blocks[:4]:
                 print(sql)
                 if sql.startswith('DROP DATABASE') or sql.startswith('CREATE DATABASE') :
@@ -34,12 +36,12 @@ def setup_db(create=False):
                     cur.execute(sql)
                     conn.commit()
 
-            with conncur(dbname='heatmap_test',user='postgres', host='localhost', port=5432) as (conn, cur):
+            with conncur(dbname='heatmap_test',user='postgres', host='127.0.0.1', port=5432) as (conn, cur):
                 sql = sql_blocks[4]
                 cur.execute(sql)
                 conn.commit()
 
-    with conncur(dbname='heatmap_test',user='heatmapadmin', host='localhost', port=5432) as (conn, cur):
+    with conncur(dbname='heatmap_test',user='heatmapadmin', host='127.0.0.1', port=5432) as (conn, cur):
         for sql in sql_blocks[5:8]:
             print(sql)
             cur.execute(sql)
