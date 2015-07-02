@@ -13,6 +13,7 @@ pip freeze > heatmap_venv/requirements.txt
 mod_wsgi-express install-module
 deactivate
 mkdir $INSTALL_DIR
+rm -rf $INSTALL_DIR/heatmap_venv
 mv heatmap_venv $INSTALL_DIR
 cd ..
 rmdir $BUILD_DIR
