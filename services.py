@@ -10,6 +10,7 @@
 """
 
 from functools import wraps
+from os import environ
 
 import requests
 import psycopg2 as pg
@@ -18,7 +19,11 @@ from lxml import etree
 
 import numpy as np
 
-from IPython import embed
+if environ.get('HEATMAP_PROD',None):
+    embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
+else:
+    from IPython import embed
+
 
 """
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (

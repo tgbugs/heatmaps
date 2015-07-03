@@ -5,8 +5,13 @@
 
 # TODO do we need prov for generating lists of terms from the ontology?
 
+from os import environ
 from flask import Flask, url_for, request, render_template, render_template_string, make_response
-from IPython import embed  #FIXME
+
+if environ.get('HEATMAP_PROD',None):
+    embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
+else:
+    from IPython import embed  #FIXME
 
 from services import heatmap_service, summary_service, term_service
 
@@ -98,7 +103,7 @@ def HMID(name):
     if hm_data:
         out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))
         response = make_response(out)  #FIXME get ur types straight
-        response.headers['Content-Disposition '] = "attachment; filename = data.csv"
+        response.headers['Content-Disposition'] = "attachment; filename = data.csv"
         response.mimetype = 'text/csv'
         return response
     else:
@@ -116,7 +121,8 @@ terms_form = Form("NIF heatmaps from terms",
                     ('text','text','file'),
                     (HMID, TERMLIST, TERMFILE))
 
-@hmapp.route(hmext + "terms", methods = ['GET','POST'])
+#@hmapp.route(hmext + "terms", methods = ['GET','POST'])
+@hmapp.route("/heatmaps", methods = ['GET','POST'])
 def hm_terms():
     if request.method == 'POST':
         return terms_form.data_received()
