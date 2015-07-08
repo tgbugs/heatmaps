@@ -181,14 +181,17 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 
             IDS ARE NOT HANDLED HERE
         """
-        query_url = self.url % term
+        query_url = self.url % ('"%s"' % term)  #we must quote to avoid AND, triggering error# TODO we could allow full queries rather than just terms if we were insane
+        print('summary query url:', query_url)
         xml = self.get(query_url, 'xml')
         nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
                                       '//literatureSummary/@resultCount')
 
         #FIXME do we even need name anymore if we aren't dealing with ids in here?
         #TODO deal with names and empty nodes
-        name = name[0].text
+
+        #FIXME this fails when there is a space because it applies AND instead of quoting
+        name = name[0].text.strip('"').rstrip('"')  # strip quotes from terms w/ spaces
         if name != term:
             raise TypeError('for some reason name != term: %s != %s'%(name, term))
 
@@ -502,8 +505,9 @@ class heatmap_service(database_service):
         terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM_ID
 
         if len(terms) < self.TERM_MIN:  #TODO need to pass error back out for the web
-            print("We do not mint DOIS for heatmaps with less than %s terms."%self.TERM_MIN)
-            return None, hm_data
+            message = "We do not mint DOIS for heatmaps with less than %s terms."%self.TERM_MIN
+            print(message)
+            return hm_data, None, message
 
         #check if we already have matching data in term_history
             #if we have matching data record the
@@ -675,19 +679,6 @@ def main():
     t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
     r = "BFO_0000050"
     j = os.get_terms(t, r)
-    test_dict = test()
-    do_test = True
-    try:
-        hs = heatmap_service(ss, ts)
-        if do_test:
-            for test_terms in test_dict.values():
-                hs.get_term_counts(*test_terms)
-                hs.make_heatmap_data(*test_terms)
-        embed()
-    except:
-        raise
-    finally:
-        hs.__exit__(None,None,None)
 
 
 if __name__ == '__main__':
