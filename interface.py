@@ -1,9 +1,16 @@
+#!/usr/bin/env python3
 """
     The web implementation for the heatmaps service
     will probably also put the order service here
 """
 
 # TODO do we need prov for generating lists of terms from the ontology?
+
+# TODO: need to clear heatmap id and add a message on download!
+# need to add a "collecting data" message for large queries
+# need to add datetime and heatmap prov id to the csv download
+# need to make the title of the csv nice
+# neet to develop a series of tests designed to wreck the text input box
 
 from os import environ
 from flask import Flask, url_for, request, render_template, render_template_string, make_response
@@ -71,7 +78,7 @@ class Form(Templated):  # FIXME separate callbacks? nah?
                 out = field.callback()
                 if out:
                     if type(out) == str:  #FIXME all callbacks need to return a response object or nothing
-                        return self.render() + "<br>" + out
+                        return self.render() + "<br>" + out  # rerender the original form but add the output of the callback
                     else:
                         return out
                     #return "Did this work?"
@@ -111,10 +118,29 @@ def HMID(name):
     #return request.form[name]
 
 def TERMLIST(name):
+    # identify separator  # this is hard, go with commas I think we must
+    # split
+    # pass into make_heatmap_data
+    # return csv and id
+    data = request.form[name]
+    terms = data.split(', ')
+    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(*terms)
+    if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
+        return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
+    return repr((hm_data, hp_id, timestamp))
     return request.form[name]
 
 def TERMFILE(name):
-    return request.files[name]
+    # identify sep
+    # split
+    # pass into make_heatmap_data
+    # return csv and id
+
+    try:
+        return request.files[name]
+    except KeyError:
+        raise
+
 
 terms_form = Form("NIF heatmaps from terms",
                     ("Heatmap ID (int)","Term list", "Term file"),  #TODO select!
@@ -125,6 +151,7 @@ terms_form = Form("NIF heatmaps from terms",
 @hmapp.route("/heatmaps", methods = ['GET','POST'])
 def hm_terms():
     if request.method == 'POST':
+        print('HELLO WORLD')
         return terms_form.data_received()
     else:
         return terms_form.render()
@@ -134,7 +161,7 @@ def hm_terms():
 
 
 ###
-#   various POST/GET handlers
+#   various POST/GET handlers  XXX NOT BEING USED
 ##
 
 
@@ -185,7 +212,7 @@ def terms_GET():
 
 
 ###
-#   Utility funcs that will be moved elsewhere eventually
+#   Utility funcs that will be moved elsewhere eventually  XXX NOT BEING USED
 ##
 
 def file_to_terms(file):  # TODO
