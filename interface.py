@@ -13,7 +13,7 @@
 # neet to develop a series of tests designed to wreck the text input box
 
 from os import environ
-from flask import Flask, url_for, request, render_template, render_template_string, make_response
+from flask import Flask, url_for, request, render_template, render_template_string, make_response, abort
 
 if environ.get('HEATMAP_PROD',None):
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
@@ -50,12 +50,15 @@ class FormField:
         """ form field factory """
         return [FormField(title, type_, callback) for title, type_, callback in zip(titles, types, callbacks)]
 
+    def __repr__(self):
+        return "<FormField %s %s>" % (str(self.type), str(self.title)) 
+
 class Form(Templated):  # FIXME separate callbacks? nah?
 
     TEMPLATE = """
     <!doctype html>
     <title>{{title}}</title>
-    <form method=POST enctype=multipart/form-data>
+    <form action=heatmaps/submit method=POST enctype=multipart/form-data>
         {% for field in fields %}
             {{field.title}}: <br>
             <input type={{field.type}} name={{field.name}}> <br>
@@ -74,14 +77,18 @@ class Form(Templated):  # FIXME separate callbacks? nah?
 
     def data_received(self):
         if self.exit_on_success:
+            print('dr', self.fields)
             for field in self.fields:
                 out = field.callback()
+                print(field, 'data_received', out)
                 if out:
                     if type(out) == str:  #FIXME all callbacks need to return a response object or nothing
+                        return 'Your submisison is processing, your number is # \n' + out
                         return self.render() + "<br>" + out  # rerender the original form but add the output of the callback
                     else:
                         return out
                     #return "Did this work?"
+            return "You didnt submit anything... go back and try again!"
             return self.render()  # so that we don't accidentally return None
         else:
             for field in self.fields:
@@ -106,16 +113,7 @@ def HMID(name):
         return None
     except:
         raise
-    hm_data = hmserv.get_heatmap_data_from_id(hm_id)
-    if hm_data:
-        out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))
-        response = make_response(out)  #FIXME get ur types straight
-        response.headers['Content-Disposition'] = "attachment; filename = data.csv"
-        response.mimetype = 'text/csv'
-        return response
-    else:
-        return "No heatmap with id %s." % hm_id  #FIXME TYPES!!!
-    #return request.form[name]
+    return csv_from_id(hm_id)
 
 def TERMLIST(name):
     # identify separator  # this is hard, go with commas I think we must
@@ -123,24 +121,48 @@ def TERMLIST(name):
     # pass into make_heatmap_data
     # return csv and id
     data = request.form[name]
+    if not data:  # term list is empty
+        return None
     terms = data.split(', ')
-    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(*terms)
-    if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
-        return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
-    return repr((hm_data, hp_id, timestamp))
-    return request.form[name]
+    return do_terms(terms)
 
 def TERMFILE(name):
     # identify sep
     # split
     # pass into make_heatmap_data
     # return csv and id
-
     try:
-        return request.files[name]
+        file = request.files[name]
+        print('TERMFILE type', file)
+        terms = [ l.rstrip().decode() for l in file.stream.readlines() ]
+        return do_terms(terms)
     except KeyError:
         raise
 
+def do_terms(terms):
+    # FIXME FIXME this is NOT were we should be doing data sanitizaiton :/
+    if not terms:
+        print('no terms!')
+        return None
+    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(*terms)
+    if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
+        return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
+    return repr((hm_data, hp_id, timestamp))
+
+def csv_from_id(hm_id):
+    hm_id = int(hm_id)
+    hm_data = hmserv.get_heatmap_data_from_id(hm_id)
+    timestamp = hmserv.get_timestamp_from_id(hm_id)
+    if hm_data:
+        out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))
+        response = make_response(out)  #FIXME get ur types straight
+        response.headers['Content-Disposition'] = "attachment; filename = nif_heatmap_%s_%s.csv" % (hm_id, timestamp)
+        response.mimetype = 'text/csv'
+        return response
+    else:
+        return abort(404)
+        #return "No heatmap with id %s." % hm_id  #FIXME TYPES!!!
+    #return request.form[name]
 
 terms_form = Form("NIF heatmaps from terms",
                     ("Heatmap ID (int)","Term list", "Term file"),  #TODO select!
@@ -151,10 +173,27 @@ terms_form = Form("NIF heatmaps from terms",
 @hmapp.route("/heatmaps", methods = ['GET','POST'])
 def hm_terms():
     if request.method == 'POST':
-        print('HELLO WORLD')
         return terms_form.data_received()
     else:
         return terms_form.render()
+
+@hmapp.route("/heatmaps/submit", methods = ['GET', 'POST'])
+def hm_submit():
+    if request.method == 'POST':
+        return terms_form.data_received()
+    else:
+        return "Nothing submited FIXME need to keep session alive??!"
+    
+@hmapp.route("/heatmaps/prov/<hm_id>", methods = ['GET'])
+def hm_getfile(hm_id):
+    try:
+        hm_id = int(hm_id)
+        return csv_from_id(hm_id)
+    except ValueError:
+        return abort(404)
+        #return 'Invalid heatmap identifier "%s", please enter an integer.' % hm_id, 404
+        #return None, 404
+    
 
 #@hmapp.route(hmext + )
 
