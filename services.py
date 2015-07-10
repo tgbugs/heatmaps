@@ -433,6 +433,17 @@ class heatmap_service(database_service):
             src_id_order = sorted(hm_data[TOTAL_TERM_ID])
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order)
 
+    @sanitize_input
+    def get_timestamp_from_id(self, hm_id):
+        sql = """SELECT datetime FROM heatmap_prov WHERE id=%s;"""
+        args = (hm_id,)
+        tuples = self.cursor_exec(sql, args)
+        if tuples:
+            timestamp = tuples[0][0].isoformat()
+            return timestamp
+        else:
+            return None
+
     def get_term_counts(self, *terms):  #FIXME this fails if given an id!
         """ given a collection of terms returns a dict of dicts of their counts
             this is where we make calls to summary_server, we are currently handling
