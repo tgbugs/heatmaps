@@ -19,7 +19,7 @@ from lxml import etree
 
 import numpy as np
 
-if environ.get('HEATMAP_PROD',None):
+if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
 else:
     from IPython import embed
@@ -363,9 +363,13 @@ class heatmap_service(database_service):
         service but it also manages the provenance for each heatmap generated
         and can retrieve specific heatmaps by id or date
     """
-    dbname = "heatmap_test"
+    if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi
+        dbname = "heatmap"
+        host = "postgres.neuinfo.org"  # should probably put this in environment variables as well 
+    else:
+        dbname = "heatmap_test"
+        host = "localhost"#"postgres-stage@neuinfo.org"
     user = "heatmapuser"
-    host = "localhost"#"postgres-stage@neuinfo.org"
     port = 5432
     TERM_MIN = 5
     def __init__(self, summary_server, term_server):
