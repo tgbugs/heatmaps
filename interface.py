@@ -58,7 +58,7 @@ class Form(Templated):  # FIXME separate callbacks? nah?
     TEMPLATE = """
     <!doctype html>
     <title>{{title}}</title>
-    <form action=heatmaps/submit method=POST enctype=multipart/form-data>
+    <form action=terms/submit method=POST enctype=multipart/form-data>
         {% for field in fields %}
             {{field.title}}: <br>
             <input type={{field.type}} name={{field.name}}> <br>
@@ -100,10 +100,21 @@ hmserv = heatmap_service(summary_service(), term_service())  # mmm nasty singlet
 
 hmapp = Flask("heatmap service")
 
-base_url = "http://nif-services.neuinfo.org"
-base_url = "localhost:5000"
-base_ext = "/servicesv1/v1/"
-hmext = base_ext + "heatmap/"
+#base_url = "localhost:5000"
+#base_url = "http://nif-services.neuinfo.org:5000"
+
+#base_ext = "/servicesv1/v1/heatmaps/"
+#hmext = base_ext + "heatmap/"
+
+if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
+    host = "http://nif-services.neuinfo.org"
+else:
+    host = "http://localhost:5000"
+
+ext_path = "/servicesv1/v1/heatmaps"
+
+base_url = ext_path
+
 
 def HMID(name):
     #validate doi consider the alternative to not present the doi directly via our web interface?
@@ -115,7 +126,7 @@ def HMID(name):
         raise
     return csv_from_id(hm_id)
 
-def TERMLIST(name):
+def TERMLIST(name):  # TODO fuzz me!  FIXME "!" causes the summary service to crash!
     # identify separator  # this is hard, go with commas I think we must
     # split
     # pass into make_heatmap_data
@@ -123,10 +134,10 @@ def TERMLIST(name):
     data = request.form[name]
     if not data:  # term list is empty
         return None
-    terms = data.split(', ')
+    terms = [t.strip().rstrip() for t in data.split(',')]  # FIXME chemical names :/
     return do_terms(terms)
 
-def TERMFILE(name):
+def TERMFILE(name):  # TODO fuzz me!
     # identify sep
     # split
     # pass into make_heatmap_data
@@ -165,26 +176,26 @@ def csv_from_id(hm_id):
     #return request.form[name]
 
 terms_form = Form("NIF heatmaps from terms",
-                    ("Heatmap ID (int)","Term list", "Term file"),  #TODO select!
+                    ("Heatmap ID (int)","Term list (comma separated)", "Term file (newline separated)"),  #TODO select!
                     ('text','text','file'),
                     (HMID, TERMLIST, TERMFILE))
 
 #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
-@hmapp.route("/heatmaps", methods = ['GET','POST'])
+@hmapp.route(base_url + "/terms", methods = ['GET','POST'])
 def hm_terms():
     if request.method == 'POST':
         return terms_form.data_received()
     else:
         return terms_form.render()
 
-@hmapp.route("/heatmaps/submit", methods = ['GET', 'POST'])
+@hmapp.route(base_url + "/terms/submit", methods = ['GET', 'POST'])
 def hm_submit():
     if request.method == 'POST':
         return terms_form.data_received()
     else:
         return "Nothing submited FIXME need to keep session alive??!"
     
-@hmapp.route("/heatmaps/prov/<hm_id>", methods = ['GET'])
+@hmapp.route(base_url + "/prov/<hm_id>", methods = ['GET'])
 def hm_getfile(hm_id):
     try:
         hm_id = int(hm_id)
