@@ -24,9 +24,9 @@ setup(
     #extras_require
     #package_data
     #data_files
-    #entry_points={
-        #'console_scripts': [
-            #'hmweb=services:main',
-        #],
-    #},
+    entry_points={
+        'console_scripts': [
+            'hmweb=heatmaps.webapp:main',
+        ],
+    },
 )

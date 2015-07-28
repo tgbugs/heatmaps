@@ -1,4 +1,5 @@
-from services import heatmap_service, summary_service, term_service
+#from services import heatmap_service, summary_service, term_service
+# IMPORTS NOW BROKEN DUE TO RESTRUCTURING THE PROJECT WHEEEEE
 
 def test(heatmap_service):
     # need to restructure how we actually do tests
