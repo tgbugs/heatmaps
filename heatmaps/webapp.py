@@ -277,8 +277,13 @@ def do_sep(string):
 #please login to get a doi? implementing this with an auth cookie? how do?
 
 def main():
-    hmapp.debug = True
-    hmapp.run()
+    if environ.get('HEATMAP_PROD',None):
+        hmapp.debug = False
+        hmapp.run(host='0.0.0.0')  # 0.0.0.0 tells flask to listen externally
+    else:
+        hmapp.debug = True
+        hmapp.run(host='127.0.0.1')
+
 
 if __name__ == '__main__':
     main()
