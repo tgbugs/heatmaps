@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='heatmaps',
@@ -11,7 +11,7 @@ setup(
     license='MIT',
     classifiers=[],
     keywords='rest nif',
-    #packages
+    packages = find_packages(),
     install_requires=[
         'docopt',
         'lxml',
