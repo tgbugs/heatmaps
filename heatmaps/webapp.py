@@ -113,7 +113,7 @@ else:
 
 ext_path = "/servicesv1/v1/heatmaps"
 
-base_url = ext_path
+base_url = host + ext_path
 
 
 def HMID(name):
@@ -158,22 +158,45 @@ def do_terms(terms):
     hm_data, hp_id, timestamp = hmserv.make_heatmap_data(*terms)
     if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
         return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
-    return repr((hm_data, hp_id, timestamp))
+    #return repr((hm_data, hp_id, timestamp))
+    output = """
+            <!doctype html>
+            <title>Submit</title>
+            Your heatmap can be downloaded as a csv or as a json file at:
+            <br><br>
+            <a href={url}.csv>{url}.csv</a>
+            <br>
+            <a href={url}.json>{url}.json</a>
+            <br><br>
+            If you ever need to download your heatmap again you can get it again
+            as long as you know your heatmap id which is {id}.
+            """.format(url=base_url + '/prov/' + str(hp_id), id=hp_id)
+    return output
 
-def csv_from_id(hm_id):
+
+def data_from_id(hm_id, filetype):
     hm_id = int(hm_id)
     hm_data = hmserv.get_heatmap_data_from_id(hm_id)
     timestamp = hmserv.get_timestamp_from_id(hm_id)
     if hm_data:
-        out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))
-        response = make_response(out)  #FIXME get ur types straight
-        response.headers['Content-Disposition'] = "attachment; filename = nif_heatmap_%s_%s.csv" % (hm_id, timestamp)
-        response.mimetype = 'text/csv'
+        if filetype == 'csv':
+            out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))
+            response = make_response(out)  #FIXME get ur types straight
+            response.headers['Content-Disposition'] = "attachment; filename = nif_heatmap_%s_%s.csv" % (hm_id, timestamp)
+            response.mimetype = 'text/csv'
+        elif filetype == 'json' or filetype == None:
+            out = hmserv.output_json(hm_data)
+            response = make_response(out)  #FIXME get ur types straight
+            response.headers['Content-Disposition'] = "filename = nif_heatmap_%s_%s.json" % (hm_id, timestamp)
+            response.mimetype = 'application/json'
+        else:
+            return abort(404)  # XXX NOTE this should be handled earlier
         return response
     else:
         return abort(404)
         #return "No heatmap with id %s." % hm_id  #FIXME TYPES!!!
     #return request.form[name]
+
 
 terms_form = Form("NIF heatmaps from terms",
                     ("Heatmap ID (int)","Term list (comma separated)", "Term file (newline separated)"),  #TODO select!
@@ -181,25 +204,30 @@ terms_form = Form("NIF heatmaps from terms",
                     (HMID, TERMLIST, TERMFILE))
 
 #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
-@hmapp.route(base_url + "/terms", methods = ['GET','POST'])
+@hmapp.route(ext_path + "/terms", methods = ['GET','POST'])
 def hm_terms():
     if request.method == 'POST':
         return terms_form.data_received()
     else:
         return terms_form.render()
 
-@hmapp.route(base_url + "/terms/submit", methods = ['GET', 'POST'])
+@hmapp.route(ext_path + "/terms/submit", methods = ['GET', 'POST'])
 def hm_submit():
     if request.method == 'POST':
         return terms_form.data_received()
     else:
         return "Nothing submited FIXME need to keep session alive??!"
     
-@hmapp.route(base_url + "/prov/<hm_id>", methods = ['GET'])
-def hm_getfile(hm_id):
+
+@hmapp.route(ext_path + "/prov/<hm_id>", methods = ['GET'])
+@hmapp.route(ext_path + "/prov/<hm_id>.<filetype>", methods = ['GET'])
+def hm_getfile(hm_id, filetype=None):
     try:
         hm_id = int(hm_id)
-        return csv_from_id(hm_id)
+        if filetype in hmserv.supported_filetypes:
+            return data_from_id(hm_id, filetype)
+        else:
+            return abort(404)
     except ValueError:
         return abort(404)
         #return 'Invalid heatmap identifier "%s", please enter an integer.' % hm_id, 404
@@ -208,6 +236,25 @@ def hm_getfile(hm_id):
 
 #@hmapp.route(hmext + )
 
+@hmapp.route(ext_path + '/', methods = ['GET'])
+@hmapp.route(ext_path, methods = ['GET'])
+def overview():
+    page = """
+    <!doctype html>
+    <title>NIF Heatmaps</title>
+    <h1>NIF heatmaps services </h1>
+    Submit lists of terms and download overviews of the entireity of the NIF data federation.<br>
+    Use the form found <a href={terms_url}>here</a> to submit lists of terms or
+    you can use the<br>REST api described in the documentation. <br>
+    Documentation can be found here: <br>
+    <a href={docs_url}>{docs_url}</a>
+    """.format(docs_url=base_url + '/docs', terms_url=base_url + '/terms')
+    return page
+
+@hmapp.route(ext_path + '/docs', methods = ['GET'])
+@hmapp.route(ext_path + '/docs/', methods = ['GET'])
+def docs():
+    return "DOCUMENTATION IS A FOUR LETTER WORD"
 
 
 ###
