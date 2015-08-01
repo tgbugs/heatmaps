@@ -9,6 +9,7 @@
 
 """
 
+import simplejson
 from functools import wraps
 from os import environ
 
@@ -180,8 +181,12 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
             given a term return a dict of counts for each unique src_nifid
 
             IDS ARE NOT HANDLED HERE
+            TERM MUNGING NOT HERE EITHER
         """
-        query_url = self.url % ('"%s"' % term)  #we must quote to avoid AND, triggering error# TODO we could allow full queries rather than just terms if we were insane
+        if ' '  in term:  # we need to do this here, users shouldn't see this
+            term = '"%s"' % term
+        query_url = self.url % term  # any preprocessing of the term BEFORE here
+
         print('summary query url:', query_url)
         xml = self.get(query_url, 'xml')
         nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
@@ -191,12 +196,13 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         #TODO deal with names and empty nodes
 
         #FIXME this fails when there is a space because it applies AND instead of quoting
-        name = name[0].text.strip('"').rstrip('"')  # strip quotes from terms w/ spaces
+        name = name[0].text # return EXACT queries that were used
         if name != term:
-            raise TypeError('for some reason name != term: %s != %s'%(name, term))
+            print('for some reason name != term: %s != %s'%(name, term))
+            #raise TypeError('for some reason name != term: %s != %s'%(name, term))
 
         nifid_count = self._walk_nodes(nodes)
-        print("nifid_count", nifid_count)
+        #print("nifid_count", nifid_count)
         nifid_count[LITERATURE_ID] = int(lit[0])
 
         return nifid_count
@@ -211,6 +217,33 @@ class term_service(rest_service):  # FURL PLS
     url = SCIGRAPH + "/scigraph/vocabulary/term/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
     name_url = SCIGRAPH + "/scigraph/vocabulary/id/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
     _timeout = 2
+
+    def terms_preprocessing(self, terms):
+
+        assert type(terms[0]) == str, "terms[0] has wrong type: %s" % terms
+        # TODO do we want to deal with id/term overlap? (NO)
+        terms = tuple(set([TOTAL_TERM_ID]+list(terms)))  #removes dupes
+
+        cleaned_terms = []
+        for term in terms:
+            term = term.strip().rstrip().strip('"').strip().rstrip()  # insurance
+            cleaned_terms.append(term)
+
+        return cleaned_terms
+
+    def terms_id_expansion(self, terms):
+        """
+            TODO we do need to map lists of terms to identifiers so that we can
+            do sorting and clustering, need to work out how we will do this and
+            when we will do this. We probably need 3 things:
+            1) the term the user entered
+            2) the id if it exists, None if we don't find a match
+            3) the label for that id
+        """
+        # try to expand terms to identifiers
+        # if that fails try to expand identifiers to terms
+        # guess agressively that terms with '_' in them are identifiers
+        # same goes for things that look like curies
 
     def get_id(self, term):
         #term = term.replace(' ','%20')  # FIXME
@@ -372,6 +405,7 @@ class heatmap_service(database_service):
     user = "heatmapuser"
     port = 5432
     TERM_MIN = 5
+    supported_filetypes = None, 'csv', 'json'
     def __init__(self, summary_server, term_server):
         super().__init__()
         self.summary_server = summary_server
@@ -453,12 +487,11 @@ class heatmap_service(database_service):
             this is where we make calls to summary_server, we are currently handling
             term failures in here which seems to make sense for time efficiency
         """
-        assert type(terms[0]) == str, "terms[0] has wrong type: %s" % terms
-        # TODO do we want to deal with id/term overlap? (NO)
-        terms = tuple(set([TOTAL_TERM_ID]+list(terms)))  #removes dupes
+        cleaned_terms = self.term_server.terms_preprocessing(terms)  # clean terms
+        terms = None  # insurance against stupidity
         term_count_dict = {}
         failed_terms = []
-        for term in terms:
+        for term in cleaned_terms:
             try:
                 nifid_count = self.term_count_dict[term]
             except KeyError:
@@ -517,6 +550,7 @@ class heatmap_service(database_service):
         """
         self.check_counts() #call to * to validate counts
         hm_data, fails = self.get_term_counts(*terms)  # call this internally to avoid race conds
+        
         terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM_ID
 
         if len(terms) < self.TERM_MIN:  #TODO need to pass error back out for the web
@@ -625,6 +659,7 @@ class heatmap_service(database_service):
 
     def output_json(self, heatmap_data):
         """ return a json object with the raw data and the src_id and term_id mappings """
+        return simplejson.dumps(heatmap_data)
 
     def __repr__(self):
         a = str(self.resources).replace('),','),\n')+'\n'
