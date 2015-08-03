@@ -11,7 +11,7 @@ setup(
     license='MIT',
     classifiers=[],
     keywords='rest nif',
-    packages = find_packages(),
+    packages = find_packages(exclude=['tests*', 'util*']),
     install_requires=[
         'docopt',
         'lxml',
@@ -20,6 +20,7 @@ setup(
         'requests',
         'ipython',
         'flask',
+        'simplejson',
     ],
     #extras_require
     #package_data
