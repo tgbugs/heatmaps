@@ -530,7 +530,7 @@ class heatmap_service(database_service):
         try:
             name_order = []
             for src_id in id_order:
-                name = self.resources[src_id][0]
+                name = ' '.join(self.resources[src_id])  # get name for each view
                 name_order.append(name)
         except KeyError:  # it's terms
             name_order = []  # just in case something wonky happens up there
