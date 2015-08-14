@@ -270,7 +270,7 @@ class term_service(rest_service):  # FURL PLS
     def get_name(self, tid):
         query_url = self.name_url % tid
         try:
-            records = self.get(query_url, 'json')['concepts']
+            records = self.get(query_url, 'json')['concepts']  # NOTE: can reveal SciGraph bugs!
         except ConnectionError:
             print(query_url)
             return None
@@ -633,8 +633,10 @@ class heatmap_service(database_service):
         #this needs access id->name mappings
         #pretty sure I already have this written?
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order)
-        term_names = self.get_names_from_ids(term_id_order)
-        src_names = self.get_names_from_ids(src_id_order)
+        term_names = ['"%s"' % n if sep in n else n for n in self.get_names_from_ids(term_id_order)]
+        src_names = ['"%s"' % n if sep in n else n for n in self.get_names_from_ids(src_id_order)]
+        term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
+        src_id_order = ['"%s"' % n if sep in n else n for n in src_id_order]  # probably dont need this here
 
         if export_ids:
             empty_col_str = sep * 2
