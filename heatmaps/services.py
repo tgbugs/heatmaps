@@ -663,6 +663,9 @@ class heatmap_service(database_service):
         """ return a json object with the raw data and the src_id and term_id mappings """
         return simplejson.dumps(heatmap_data)
 
+    def output_png(self, heatmap_data, termSort, sourceSort, termCollapse, sourceCollapse):
+        return "THIS IS A PNG FILE I SWEAR" 
+
     def __repr__(self):
         a = str(self.resources).replace('),','),\n')+'\n'
         b = repr(self.term_count_dict).replace(',',',\n')
