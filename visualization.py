@@ -67,6 +67,39 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
 
     return output
 
+def apply_order(dict_, key_order):
+    """ applys an order to values of a dict based on an ordering of the keys
+        if the dict to be ordered is missing a key that is in the order then
+        a value of None is inserted in that position of the output list
+    """
+    ordered = []
+    for key in key_order:
+        try:
+            ordered.append(dict_[key])
+        except KeyError:
+            ordered.append(None)  # convert to zero later for numerical
+    return  ordered
+                        
+def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
+    """ given heatmap data, and orders on sources and terms
+        return a matrix representation
+    """
+    #sanity check
+    if len(tdict_sdict) < len(term_id_order):  # term_ids can be a subset!
+        # note that we *could* allow empty terms in the dict but that should
+        # be handled elsewhere
+        embed()
+        raise IndexError("Term orders must be subsets of the dict!")
+    if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_id_order):  # these must match
+        raise IndexError("Source orders must match the total source counts!")
+
+    matrix = np.empty((len(term_id_order), len(src_id_order)))
+    for i, term in enumerate(term_id_order):
+        row = apply_order(tdict_sdict[term], src_id_order)
+        matrix[i,:] = row
+
+    return np.nan_to_num(matrix)
+
 def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termSort=sorted, sourceSort=sorted, TOTAL_KEY='federation totals'):
     """
         Given a heatmap_data object collapse and sort the terms and sources and return an 

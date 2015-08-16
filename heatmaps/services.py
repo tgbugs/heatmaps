@@ -25,6 +25,7 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
+from .visualization import heatmap_data_processing, dict_to_matrix
 
 """
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
@@ -663,7 +664,8 @@ class heatmap_service(database_service):
         """ return a json object with the raw data and the src_id and term_id mappings """
         return simplejson.dumps(heatmap_data)
 
-    def output_png(self, heatmap_data, termSort, sourceSort, termCollapse, sourceCollapse):
+    def output_png(self, heatmap_data, termCollapse, sourceCollapse, termSort, sourceSort):
+        matrix = heatmap_data_processing(heatmap_data, termCollapse, sourceCollapse, termSort, sourceSort)
         return "THIS IS A PNG FILE I SWEAR" 
 
     def __repr__(self):
@@ -687,40 +689,6 @@ def int_cast(dict):
     return {k:int(v) for k,v in dict.items()}
 def str_cast(dict):
     return {k:str(v) for k,v in dict.items()}
-
-def apply_order(dict_, key_order):
-    """ applys an order to values of a dict based on an ordering of the keys
-        if the dict to be ordered is missing a key that is in the order then
-        a value of None is inserted in that position of the output list
-    """
-    ordered = []
-    for key in key_order:
-        try:
-            ordered.append(dict_[key])
-        except KeyError:
-            ordered.append(None)  # convert to zero later for numerical
-    return  ordered
-                        
-def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
-    """ given heatmap data, and orders on sources and terms
-        return a matrix representation
-    """
-    #sanity check
-    if len(tdict_sdict) < len(term_id_order):  # term_ids can be a subset!
-        # note that we *could* allow empty terms in the dict but that should
-        # be handled elsewhere
-        embed()
-        raise IndexError("Term orders must be subsets of the dict!")
-    if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_id_order):  # these must match
-        raise IndexError("Source orders must match the total source counts!")
-
-    matrix = np.empty((len(term_id_order), len(src_id_order)))
-    for i, term in enumerate(term_id_order):
-        row = apply_order(tdict_sdict[term], src_id_order)
-        matrix[i,:] = row
-
-    return np.nan_to_num(matrix)
-
 
 ###
 #   main
