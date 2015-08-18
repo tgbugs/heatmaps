@@ -32,10 +32,8 @@ def sCollapseToSrcId(keys, id_name_dict):
 
     return dict(key_collections_dict), new_id_name_dict
 
-
 def sCollTemplate(old_keys, *args):
     return key_collections_dict, new_id_name_dict
-
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
@@ -100,7 +98,7 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
 
     return np.nan_to_num(matrix)
 
-def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termSort=sorted, sourceSort=sorted, TOTAL_KEY='federation totals'):
+def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termOrder=None, sourceOrder=None, TOTAL_KEY='federation totals'):
     """
         Given a heatmap_data object collapse and sort the terms and sources and return an 
     """
