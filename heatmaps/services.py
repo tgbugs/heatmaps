@@ -26,6 +26,10 @@ else:
 from .visualization import heatmap_data_processing, dict_to_matrix
 from .scigraph_client import Graph, Vocabulary
 
+# initilaize scigraph services
+graph = Graph()
+vocab = Vocabulary()
+
 """
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
 1,
@@ -213,12 +217,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 #   Map terms to ids  FIXME we need some way to resolve multiple mappings to ids ;_;
 ###
 
-class term_service(rest_service):  # FURL PLS
-    """ let us try this with json: result--works pretty well """
-    url = SCIGRAPH + "/scigraph/vocabulary/term/%s?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
-    name_url = SCIGRAPH + "/scigraph/vocabulary/id/%s?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
-    _timeout = 2
-
+class term_service():  # FURL PLS
     def terms_preprocessing(self, terms):
 
         assert type(terms[0]) == str, "terms[0] has wrong type: %s" % terms
@@ -249,71 +248,11 @@ class term_service(rest_service):  # FURL PLS
         # guess agressively that terms with '_' in them are identifiers
         # same goes for things that look like curies
 
-    def get_id(self, term):
-        #term = term.replace(' ','%20')  # FIXME
-        query_url = self.url % term
-        try:
-            records = self.get(query_url, 'json')['concepts']
-        except ConnectionError:
-            print(query_url)
-            return None
-        if len(records) == 1:
-            return records[0]['fragment']
-        else:
-            return records
-
-    def get_iri(self, tid):
-        query_url = self.name_url % tid
-        try:
-            records = self.get(query_url, 'json')['concepts']
-        except ConnectionError:
-            print(query_url)
-            return None
-        return records[0]['uri']
-
     def get_name(self, tid):
         # try to convert fragments into CURIE form
         tid = tid.replace('_',':')  # FIXME this will only work SOMETIMES
-        query_url = self.name_url % tid
-        try:
-            #records = self.get(query_url, 'json')['concepts']  # NOTE: can reveal SciGraph bugs!
-            record = self.get(query_url, 'json')
-        except ConnectionError:
-            print(query_url)
-            return None
-        except KeyError:
-            embed()
-            raise
-        
-        return record['labels'][0]  # WHY IS THIS SO DIFFERENT WTF
-
-        if len(records) != 1:
-            # we probably encountered a term being used as an id :/
-            #raise BaseException('what is this i dont even')
-            return tid
-        else:
-            return records[0]['labels']
-
-    def get_id_record(self, tid):
-        query_url = self.name_url % tid
-        try:
-            records = self.get(query_url, 'json')['concepts']
-        except ConnectionError:
-            print(query_url)
-            return None
-        return records
-
-    def get_term_record(self, term):
-        query_url = self.url % term
-        try:
-            records = self.get(query_url, 'json')['concepts']
-        except ConnectionError:
-            print(query_url)
-            return None
-        return records
-
-
-
+        json = vocab.findById(tid)  # FIXME cache this stuff?
+        return json['labels'][0]
 
 ###
 #   Ontology services
