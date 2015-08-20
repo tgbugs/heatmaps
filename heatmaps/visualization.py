@@ -1,4 +1,5 @@
 from collections import defaultdict
+import numpy as np
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -78,7 +79,7 @@ def apply_order(dict_, key_order):
             ordered.append(None)  # convert to zero later for numerical
     return  ordered
                         
-def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
+def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID):
     """ given heatmap data, and orders on sources and terms
         return a matrix representation
     """
@@ -98,7 +99,7 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order):
 
     return np.nan_to_num(matrix)
 
-def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termOrder=None, sourceOrder=None, TOTAL_KEY='federation totals'):
+def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termOrder=None, sourceOrder=None, TOTAL_KEY='federation_totals'):
     """
         Given a heatmap_data object collapse and sort the terms and sources and return an 
     """
