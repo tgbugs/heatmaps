@@ -18,14 +18,13 @@ import psycopg2 as pg
 from psycopg2.extras import register_hstore
 from lxml import etree
 
-import numpy as np
-
 if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
 else:
     from IPython import embed
 
 from .visualization import heatmap_data_processing, dict_to_matrix
+from .scigraph_client import Graph, Vocabulary
 
 """
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
@@ -127,7 +126,8 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
 ###
 
 class summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
-    url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
+    #url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
+    url = "http://beta.neuinfo.org/services/v1/summary.xml?q=%s"
     _timeout = 20
 
     @staticmethod
@@ -215,8 +215,8 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 
 class term_service(rest_service):  # FURL PLS
     """ let us try this with json: result--works pretty well """
-    url = SCIGRAPH + "/scigraph/vocabulary/term/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
-    name_url = SCIGRAPH + "/scigraph/vocabulary/id/%s.json?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
+    url = SCIGRAPH + "/scigraph/vocabulary/term/%s?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
+    name_url = SCIGRAPH + "/scigraph/vocabulary/id/%s?limit=20&searchSynonyms=true&searchAbbreviations=false&searchAcronyms=false"
     _timeout = 2
 
     def terms_preprocessing(self, terms):
@@ -232,7 +232,7 @@ class term_service(rest_service):  # FURL PLS
 
         return cleaned_terms
 
-    def terms_id_expansion(self, terms):
+    def term_id_expansion(self, term):
         """
             TODO we do need to map lists of terms to identifiers so that we can
             do sorting and clustering, need to work out how we will do this and
@@ -240,7 +240,10 @@ class term_service(rest_service):  # FURL PLS
             1) the term the user entered
             2) the id if it exists, None if we don't find a match
             3) the label for that id
+            4) synonyms (no acronyms or abbrevs for now)
         """
+
+        # check if it is a term, a fragment, or a curie
         # try to expand terms to identifiers
         # if that fails try to expand identifiers to terms
         # guess agressively that terms with '_' in them are identifiers
@@ -269,12 +272,21 @@ class term_service(rest_service):  # FURL PLS
         return records[0]['uri']
 
     def get_name(self, tid):
+        # try to convert fragments into CURIE form
+        tid = tid.replace('_',':')  # FIXME this will only work SOMETIMES
         query_url = self.name_url % tid
         try:
-            records = self.get(query_url, 'json')['concepts']  # NOTE: can reveal SciGraph bugs!
+            #records = self.get(query_url, 'json')['concepts']  # NOTE: can reveal SciGraph bugs!
+            record = self.get(query_url, 'json')
         except ConnectionError:
             print(query_url)
             return None
+        except KeyError:
+            embed()
+            raise
+        
+        return record['labels'][0]  # WHY IS THIS SO DIFFERENT WTF
+
         if len(records) != 1:
             # we probably encountered a term being used as an id :/
             #raise BaseException('what is this i dont even')
@@ -470,7 +482,7 @@ class heatmap_service(database_service):
             term_id_order = sorted(hm_data) 
         if not src_id_order:
             src_id_order = sorted(hm_data[TOTAL_TERM_ID])
-        heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order)
+        heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)
 
     @sanitize_input
     def get_timestamp_from_id(self, hm_id):
@@ -633,7 +645,7 @@ class heatmap_service(database_service):
         """ consturct a csv file on the fly for download response """
         #this needs access id->name mappings
         #pretty sure I already have this written?
-        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order)
+        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         term_names = ['"%s"' % n if sep in n else n for n in self.get_names_from_ids(term_id_order)]
         src_names = ['"%s"' % n if sep in n else n for n in self.get_names_from_ids(src_id_order)]
         term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
