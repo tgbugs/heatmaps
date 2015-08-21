@@ -137,7 +137,7 @@ def TERMLIST(name):  # TODO fuzz me!  FIXME "!" causes the summary service to cr
     terms = [t.strip().rstrip() for t in data.split(',')]  # FIXME chemical names :/
     return do_terms(terms)
 
-def TERMFILE(name):  # TODO fuzz me!
+def TERMFILE(name):  # TODO fuzz me!  #FIXME blank lines cause 500 errors!
     # identify sep
     # split
     # pass into make_heatmap_data
@@ -145,7 +145,7 @@ def TERMFILE(name):  # TODO fuzz me!
     try:
         file = request.files[name]
         print('TERMFILE type', file)
-        terms = [ l.rstrip().decode() for l in file.stream.readlines() ]
+        terms = [l.rstrip().decode() for l in file.stream.readlines() if l]
         return do_terms(terms)
     except KeyError:
         raise
@@ -167,6 +167,8 @@ def do_terms(terms):
             <a href={url}.csv>{url}.csv</a>
             <br>
             <a href={url}.json>{url}.json</a>
+            <br>
+            <a href={url}.png>{url}.png</a>
             <br><br>
             If you ever need to download your heatmap again you can get it again
             as long as you know your heatmap id which is {id}.
@@ -180,10 +182,16 @@ def data_from_id(hm_id, filetype):
     timestamp = hmserv.get_timestamp_from_id(hm_id)
     if hm_data:
         if filetype == 'csv':
-            out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))
+            #out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))  # BAD! number of resource can change, DERP
+            out = hmserv.output_csv(hm_data)
             response = make_response(out)  #FIXME get ur types straight
             response.headers['Content-Disposition'] = "attachment; filename = nif_heatmap_%s_%s.csv" % (hm_id, timestamp)
             response.mimetype = 'text/csv'
+        elif filetype == 'png':
+            out = hmserv.output_png(hm_data)
+            response = make_response(out)
+            response.headers['Content-Disposition'] = "filename = nif_heatmap_%s_%s.png" % (hm_id, timestamp)
+            response.mimetype = 'image/png'
         elif filetype == 'json' or filetype == None:
             out = hmserv.output_json(hm_data)
             response = make_response(out)  #FIXME get ur types straight
@@ -323,13 +331,13 @@ def do_sep(string):
 
 #please login to get a doi? implementing this with an auth cookie? how do?
 
-def main():
+def main(port=5000):
     if environ.get('HEATMAP_PROD',None):
         hmapp.debug = False
         hmapp.run(host='0.0.0.0')  # 0.0.0.0 tells flask to listen externally
     else:
         hmapp.debug = True
-        hmapp.run(host='127.0.0.1')
+        hmapp.run(host='127.0.0.1', port=port)
 
 
 if __name__ == '__main__':
