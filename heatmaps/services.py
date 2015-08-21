@@ -220,7 +220,7 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 class term_service():  # FURL PLS
 
     def __init__(self):
-        self.known_curies = v.getCuriePrefixes()
+        self.known_curies = vocab.getCuriePrefixes()
 
     def terms_preprocessing(self, terms):
 
@@ -289,7 +289,7 @@ class term_service():  # FURL PLS
                     # that is 1 then we fail over to total equiv curies
                     # then number of syns
                     # all else fails we go alpha on the curie
-                    curies_labels = [t for t in zip(*sorted(([r['curie'], r['labels']) for r in records]))]
+                    curies_labels = [t for t in zip(*sorted([(r['curie'], r['labels']) for r in records]))]
                     output_curies = None
                     output_syns = None
                     oc = None
