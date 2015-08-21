@@ -68,7 +68,6 @@ class Form(Templated):  # FIXME separate callbacks? nah?
     """
 
     def __init__(self, title, titles, types, callbacks, exit_on_success=True):
-        #action_url = base_url + route
         self.title = title
         self.fields = FormField.factory(titles, types, callbacks)
         render_kwargs = dict(title=self.title, fields=self.fields)#, action_url=action_url)
@@ -100,20 +99,12 @@ hmserv = heatmap_service(summary_service(), term_service())  # mmm nasty singlet
 
 hmapp = Flask("heatmap service")
 
-#base_url = "localhost:5000"
-#base_url = "http://nif-services.neuinfo.org:5000"
 
 #base_ext = "/servicesv1/v1/heatmaps/"
 #hmext = base_ext + "heatmap/"
 
-if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
-    host = "http://nif-services.neuinfo.org"
-else:
-    host = "http://localhost:5000"
-
 ext_path = "/servicesv1/v1/heatmaps"
 
-base_url = host + ext_path
 
 
 def HMID(name):
@@ -159,6 +150,7 @@ def do_terms(terms):
     if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
         return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
     #return repr((hm_data, hp_id, timestamp))
+    base_url = 'http://' + request.host + ext_path
     output = """
             <!doctype html>
             <title>Submit</title>
@@ -247,6 +239,7 @@ def hm_getfile(hm_id, filetype=None):
 @hmapp.route(ext_path + '/', methods = ['GET'])
 @hmapp.route(ext_path, methods = ['GET'])
 def overview():
+    base_url = 'http://' + request.host + ext_path
     page = """
     <!doctype html>
     <title>NIF Heatmaps</title>
@@ -262,7 +255,17 @@ def overview():
 @hmapp.route(ext_path + '/docs', methods = ['GET'])
 @hmapp.route(ext_path + '/docs/', methods = ['GET'])
 def docs():
-    return "DOCUMENTATION IS A FOUR LETTER WORD"
+    base_url = 'http://' + request.host + ext_path
+    page = """
+    <!doctype html>
+    <title>NIF Heatmaps Documentation</title>
+    <h1>NIF heatmaps documentation</h1>
+    To view an existing heatmap append the heatmapid to the following url: <br>
+    <a href={prov_url}>{prov_url}</a><br>
+    Currently supported filetypes are csv, json, and png. <br>
+    Example: <a href={prov_url}0.png>{prov_url}0.png</a> (note that this heatmap doesn't actually exist)
+    """.format(prov_url=base_url + ext_path + '/prov/')
+    return page
 
 
 ###
