@@ -8,7 +8,7 @@
 """
 import requests
 
-exten_mapping = {'image/png': 'png', 'text/plain; charset=utf-8': 'plain; charset=utf-8', 'text/csv': 'csv', 'application/xml': 'xml', 'application/json': 'json', 'text/tab-separated-values': 'tab-separated-values', 'text/gml': 'gml', 'application/graphson': 'graphson', 'application/graphml+xml': 'graphml+xml', 'text/html': 'html', 'application/xgmml': 'xgmml', 'text/plain': 'plain', 'image/jpeg': 'jpeg'}
+exten_mapping = {'application/xgmml': 'xgmml', 'text/plain': 'plain', 'text/plain; charset=utf-8': 'plain; charset=utf-8', 'text/tab-separated-values': 'tab-separated-values', 'image/jpeg': 'jpeg', 'text/html': 'html', 'text/csv': 'csv', 'text/gml': 'gml', 'application/json': 'json', 'application/xml': 'xml', 'application/graphson': 'graphson', 'image/png': 'png', 'application/graphml+xml': 'graphml+xml'}
 
 class restService:
     """ Base class for SciGraph rest services. """
@@ -21,7 +21,9 @@ class restService:
             req.headers['Accept'] = output
         prep = req.prepare()
         resp = s.send(prep)
-        if resp.headers['content-type'] == 'application/json':
+        if not resp.ok:
+            return None
+        elif resp.headers['content-type'] == 'application/json':
             return resp.json()
         elif resp.headers['content-type'].startswith('text/plain'):
             return resp.text
