@@ -23,7 +23,7 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
-from .visualization import heatmap_data_processing, dict_to_matrix
+from .visualization import heatmap_data_processing, dict_to_matrix, sCollapseToSrcId, make_png
 from .scigraph_client import Graph, Vocabulary
 
 # initilaize scigraph services
@@ -130,10 +130,11 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
 ###
 
 class summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
-    #url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
+    old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
     url = "http://beta.neuinfo.org/services/v1/summary.xml?q=%s"
     _timeout = 20
 
+    missing_ids = 'nif-0000-21197-1', 'nif-0000-00053-2'
     @staticmethod
     def _walk_nodes(nodes, *keys):
         """ always return counts, any extra vals goes their own dict """
@@ -178,10 +179,19 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature')
         nifid_count_total[LITERATURE_ID] = int(lit[0])
 
+        # For compatibility we include the 'old' data as well since stuff doesn't overlap :/
+        # man I hope we never get rid of a view :/
+        old_query_url = self.old_url % '*'
+        old_xml = self.get(old_query_url, 'xml')
+        old_nodes, old_lit = self.xpath(old_xml, '//results/result', '//literatureSummary/@resultCount')  # FIXME these queries do need to go up top to make it easier to track and modify them as needed
+        old_nifid_count_total, old_resource_data_dict = self._walk_nodes(old_nodes, 'db', 'indexable')
+        resource_data_dict.update(old_resource_data_dict)  # URG
+
         # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
         return resource_data_dict, nifid_count_total
 
     def get_counts(self, term):  #FIXME this really needs to be async or something
+        # FIXME we need anaomoly detection here! if we are suddenly getting back no results!
         """
             given a term return a dict of counts for each unique src_nifid
 
@@ -196,6 +206,8 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
         xml = self.get(query_url, 'xml')
         nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
                                       '//literatureSummary/@resultCount')
+
+        #TODO we need to gather all the metadata about the expansion used
 
         #FIXME do we even need name anymore if we aren't dealing with ids in here?
         #TODO deal with names and empty nodes
@@ -383,7 +395,7 @@ class term_service():  # FURL PLS
         # try to convert fragments into CURIE form
         tid = tid.replace('_',':')  # FIXME this will only work SOMETIMES
         json = vocab.findById(tid)  # FIXME cache this stuff?
-        return json['labels'][0]
+        return json['labels'][0] if json else None
 
 ###
 #   Ontology services
@@ -471,7 +483,7 @@ class database_service:  # FIXME reimplement with asyncio?
             cur.close()
 
 
-class heatmap_service(database_service):
+class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
     """ The monolithic heatmap service that keeps a cache of the term counts
         as well as term names and resource names/indexable status
 
@@ -488,7 +500,7 @@ class heatmap_service(database_service):
     user = "heatmapuser"
     port = 5432
     TERM_MIN = 5
-    supported_filetypes = None, 'csv', 'json'
+    supported_filetypes = None, 'csv', 'json', 'png'
     def __init__(self, summary_server, term_server):
         super().__init__()
         self.summary_server = summary_server
@@ -497,7 +509,7 @@ class heatmap_service(database_service):
         self.term_names = {TOTAL_TERM_ID:TOTAL_TERM_ID_NAME}  #FIXME these dicts may need to be ordered so we don't use too much memory
         self.resources = None
         self.check_counts()
-        output_map = {
+        output_map = {  # FIXME UNUSED
             'json':self.output_json,
             'csv':self.output_csv,
                      }
@@ -620,6 +632,8 @@ class heatmap_service(database_service):
             for term_id in id_order:
                 if term_id not in self.term_names:
                     name = self.term_server.get_name(term_id)  #FIXME we should keep a cache of this
+                    if name:
+                        self.term_names[term_id] = name  # FIXME??!? add none even if none?
                 else:
                     name = self.term_names[term_id]
 
@@ -632,6 +646,14 @@ class heatmap_service(database_service):
 
     @sanitize_input
     def make_heatmap_data(self, *terms):  # FIXME error handling
+        # SUEPER DUPER FIXME this has to be converted to async :/ preferably in webapp.py
+        # FIXME FIXME, caching and detection of existing heatmaps is BROKEN
+        # 1) we invalidate caches incorrectly and we can be fooled by a cached
+        # result on the summary service itself, we also need to check at least a
+        # single term to see if it matches, doing a full resync sucks but if we
+        # don't have a cache.... eh... not really a big deal with making new copies
+        # of the same data, bigger problem is if we can't update a bad heatmap because
+        # the federation_totals haven't changed but the results for terms themsevles have
         """ this call mints a heatmap and creates the prov record
             this is also where we will check to see if everything is up to date
         """
@@ -715,8 +737,10 @@ class heatmap_service(database_service):
 
         return hm_data, hp_id, timestamp
 
-    def output_csv(self, heatmap_data, term_id_order, src_id_order, sep=",", export_ids=True):
+    def output_csv(self, heatmap_data, sep=",", export_ids=True):
         """ consturct a csv file on the fly for download response """
+        term_id_order = sorted(heatmap_data)
+        src_id_order = sorted(heatmap_data[TOTAL_TERM_ID])
         #this needs access id->name mappings
         #pretty sure I already have this written?
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
@@ -750,9 +774,19 @@ class heatmap_service(database_service):
         """ return a json object with the raw data and the src_id and term_id mappings """
         return simplejson.dumps(heatmap_data)
 
-    def output_png(self, heatmap_data, termCollapse, sourceCollapse, termSort, sourceSort):
-        matrix = heatmap_data_processing(heatmap_data, termCollapse, sourceCollapse, termSort, sourceSort)
-        return "THIS IS A PNG FILE I SWEAR" 
+    def output_png(self, heatmap_data):
+        termCollapse = None
+        #id_name_dict = {id_:' '.join(name_tup) for id_, name_tup in self.resources.items()}
+        id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+        sourceCollapse, src_id_name_dict = sCollapseToSrcId(heatmap_data[TOTAL_TERM_ID], id_name_dict)
+        termOrder = sorted(heatmap_data)
+        sourceOrder, sourceNames = [c for c in zip(*sorted([(k, v) for k, v in src_id_name_dict.items()], key=lambda a: a[1]))]
+        matrix = heatmap_data_processing(heatmap_data, termCollapse, sourceCollapse, termOrder, sourceOrder)
+        title = 'heatmap for ...'
+        row_names = self.get_names_from_ids(termOrder)
+        col_names = sourceNames
+        png = make_png(matrix, row_names, col_names, title)
+        return png
 
     def __repr__(self):
         a = str(self.resources).replace('),','),\n')+'\n'
