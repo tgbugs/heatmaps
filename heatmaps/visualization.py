@@ -1,5 +1,8 @@
 from collections import defaultdict
 import numpy as np
+import pylab as plt
+
+from IPython import embed
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -90,6 +93,7 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID):
         embed()
         raise IndexError("Term orders must be subsets of the dict!")
     if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_id_order):  # these must match
+        embed()
         raise IndexError("Source orders must match the total source counts!")
 
     matrix = np.empty((len(term_id_order), len(src_id_order)))
@@ -110,10 +114,73 @@ def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None
     if sourceCollapse:
         heatmap_data = applyCollapse(heatmap_data, sourceCollapse)
 
-    termOrder = termSort(heatmap_data)
-    sourceOrder = sourceSort(heatmap_data[TOTAL_KEY])
+    #termOrder = termSort(heatmap_data)
+    #sourceOrder = sourceSort(heatmap_data[TOTAL_KEY])
+
+    matrix = dict_to_matrix(heatmap_data, termOrder, sourceOrder, TOTAL_KEY)
     
-    return heatmap_data, termOrder, sourceOrder
+    return matrix #, termOrder, sourceOrder
+
+def compute_diversity(matrix):
+    """ our measure of how well something is understood """
+    total_data_sources = float(matrix.shape[1])  # yay py2 >_<
+    sources_per_term = np.sum(matrix > 0, axis=1) / total_data_sources
+    return sources_per_term
+
+def make_png(matrix, row_names, col_names, title):
+    aspect = .3
+    ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
+    print('ratio', ratio)
+    base = 22  #width
+    dpi = 600
+    width_ratios = 98, 2
+    size = (base, base / ratio * aspect)  #FIXME >_<
+    print(size)
+    term_fsize = 2
+    fig = plt.figure(figsize=size, dpi=dpi)
+    gs = plt.matplotlib.gridspec.GridSpec(1, 2, wspace=0, width_ratios=width_ratios)
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1], sharey=ax1)
+
+    #axis 1
+    img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto',vmin=0,vmax=3)
+
+    #axes
+    ax1.xaxis.set_ticks([i for i in range(len(col_names))])
+    ax1.xaxis.set_ticklabels(col_names)
+    ax1.xaxis.set_ticks_position('top')
+    [l.set_rotation(90) for l in ax1.xaxis.get_majorticklabels()]  #alternate is to use plt.setp but why do that?
+    [l.set_fontsize(int(base * .25)) for l in ax1.xaxis.get_ticklabels()]
+
+    ax1.yaxis.set_ticks([i for i in range(len(row_names))])
+    ax1.yaxis.set_ticklabels(row_names)
+    ax1.yaxis.set_ticks_position('left')
+    [l.set_fontsize(term_fsize) for l in ax1.yaxis.get_ticklabels()]
+
+    ax1.tick_params(direction='in', length=0, width=0)
+
+    #axis 2
+    div = compute_diversity(matrix)  # FIXME this is called twice :/
+    ll, ul = ax1.get_ylim()
+    width = (ul - ll) / matrix.shape[0]
+    other = np.arange(ll, ul, width)[::-1]  # for whatever reason backwards, probably imshow idiocy
+    
+    print(other, div)
+    ax2.barh(other, div, width, edgecolor='None')  #FIXME for some reason horizonal breaks things?
+    ax2.yaxis.set_ticks_position('right')
+    [l.set_fontsize(term_fsize) for l in ax2.yaxis.get_ticklabels()]
+    ax2.set_xlim(0,1)
+    ax2.tick_params(direction='in', length=0, width=0)
+    ax2.xaxis.set_ticks([0,.5,1])
+    ax2.xaxis.set_ticklabels(['0','.5','1'])
+    [l.set_fontsize(int(base * .25)) for l in ax2.xaxis.get_ticklabels()]
+
+    fig.suptitle(title, x=.5, y=0, fontsize=base*.25, verticalalignment='bottom')  # FIXME stupidly broken >_<
+
+    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
+    with open('/tmp/%s.png'%title, 'rb') as f:
+        png = f.read()
+    return png
 
 def applyNames():
     """ Last step, make sure the identifier used has a name mapping! """
