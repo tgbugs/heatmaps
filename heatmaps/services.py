@@ -218,6 +218,10 @@ class summary_service(rest_service):  # FIXME implement as a service/coro? with 
 ###
 
 class term_service():  # FURL PLS
+
+    def __init__(self):
+        self.known_curies = v.getCuriePrefixes()
+
     def terms_preprocessing(self, terms):
 
         assert type(terms[0]) == str, "terms[0] has wrong type: %s" % terms
@@ -231,8 +235,117 @@ class term_service():  # FURL PLS
 
         return cleaned_terms
 
-    def term_id_expansion(self, term):
+    def get_equiv_classes(self, curie):
+        json = g.getNeighbors(record['curie'], relationshipType='equivalentClass')
+
+        syns = set()
+        curies = set()
+
+        for node in json['nodes']:
+            curies.add(node['id'])
+            syns.add(node['lbl'])
+            if 'synonym' in node['meta']:
+                syns.update(node['meta']['synonym'])  # FIXME lower()?
+
+        return tuple(sorted(curies)), tuple(syns)  # sort for crossrun const
+
+
+    def pick_identifier(self, term, record_list):
         """
+            give a score to each potential identifier
+            return the identifiers of all equivalent classes
+            of the curie with the highest score
+            if there is more than one record at a given score level
+            rank the subrecords and return the identifiers of all
+            equivalent classes of the curie with the highest score
+        """
+        score = [[], [], [], [], []]
+        for record in record_list:
+            label = record['labels'][0]
+            syns = record['synonyms']
+            if term == label:
+                options[0].append(record)
+            elif term.lower() == label.lower():
+                options[1].append(record)
+            elif term in syns:
+                options[2].append(record)
+            elif term.lower() in [s.lower() for s in syns]:
+                options[3].append(record)
+            else:
+                continue
+
+        # equivalent class assertions check?
+
+        record = None
+        for score, records in enumerate(scores):
+            if records:
+                print('record found at score', score)
+                if len(records) == 1:
+                    record = records[0]
+                    curies, syns = self.get_equiv_classes(record['curie'])
+                    return curies, syns, (record['curie'], record['labels'][0])
+                else:  # CURIE preference ordering if there are multiples at the same lvl
+                    # cscore will be by max number of matching equiv curies (min is 1)
+                    # that is 1 then we fail over to total equiv curies
+                    # then number of syns
+                    # all else fails we go alpha on the curie
+                    curies_labels = [t for t in zip(*sorted(([r['curie'], r['labels']) for r in records]))]
+                    output_curies = None
+                    output_syns = None
+                    oc = None
+                    ol = None
+
+                    s_total_match = 0
+                    s_total_equiv = 0
+                    s_total_syns = 0
+                    for c, l in curies_labels:
+                        new_cs, syns = self.get_equiv_classes(c)
+                        if new_cs == curies:  # they're all equivalent classes
+                            return new_cs, syns
+
+                        match = len(set(new_cs).intersect(set(curies)))
+
+                        if match > s_total_match:
+                            output_curies = new_cs
+                            output_syns = new_syns
+                            oc, ol = c, l
+                            s_total_match = match
+                            s_total_equiv = len(new_cs)
+                            s_total_syns = len(new_syns)
+                        elif match == s_total_match:
+                            if len(new_cs) > s_total_equiv:
+                                output_curies = new_cs
+                                output_syns = new_syns
+                                oc, ol = c, l
+                                s_total_equiv = len(new_cs)
+                                s_total_syns = len(new_syns)
+                            elif len(new_cs) == s_total_equiv:
+                                if len(new_syns) > s_total_syns:
+                                    output_curies = new_cs
+                                    output_syns = new_syns
+                                    oc, ol = c, l
+                                    s_total_syns = len(new_syns)
+                                else:
+                                    pass  # already sorted alphabetically
+
+                    return output_curies, output_syns, (oc, ol)
+
+        return None, None
+
+        
+
+    def term_id_expansion(self, putative_term):  # FIXME NOT deterministic wrt changes in scigraph
+        # TODO do we need to store raw term -> id mappings?! we want to collect terms that have no hits
+        # but if we just store the raw query term in the database then 
+        # this approach also means that stuff can get out of sync w/ the nif results
+        # we REALLY do not want to store the full expanded query (with ands etc that we use for each term
+        # maybe we can return all the expansions we are going to use on the first page and then
+        # have that page with an OK button to actually build the heatmap... yes... this seems good
+        """
+            We do all expansions here internally to keep things in sync
+            the summary service should never see a raw identifier if it exists
+            in scigraph.
+
             TODO we do need to map lists of terms to identifiers so that we can
             do sorting and clustering, need to work out how we will do this and
             when we will do this. We probably need 3 things:
@@ -240,13 +353,31 @@ class term_service():  # FURL PLS
             2) the id if it exists, None if we don't find a match
             3) the label for that id
             4) synonyms (no acronyms or abbrevs for now)
+
+            return the exact query string to run on services
         """
+
+        record_list = vocab.findById(putative_term)  # assume its a curie and try
+        if record_list:  # it is a curie
+            curies, syns, (curie, label) = self.pick_identifier(record_list)
+        elif putative_term.split('_')[0] in self.known_curies:  # it is a fragment
+            curie = putative_term.replace('_', ':')
+            record_list = vocab.findById(curie)
+            curies, syns, (curie, label) = self.pick_identifier(record_list)
+        else:  # we're going to treat it like a term
+            print('well shit')  # this makes me sad, super slow w/o a resolver w/ a single curie
+            # this sucks esp hard when we have birnlex_xxxxxxx prefixed identifiers used with
+            # 20 different iri prefixes :/
 
         # check if it is a term, a fragment, or a curie
         # try to expand terms to identifiers
         # if that fails try to expand identifiers to terms
         # guess agressively that terms with '_' in them are identifiers
         # same goes for things that look like curies
+
+        query = ' AND '
+
+        return putative_term, curie, label, query
 
     def get_name(self, tid):
         # try to convert fragments into CURIE form
@@ -487,7 +618,11 @@ class heatmap_service(database_service):
         except KeyError:  # it's terms
             name_order = []  # just in case something wonky happens up there
             for term_id in id_order:
-                name = self.term_server.get_name(term_id)  #FIXME we should keep a cache of this
+                if term_id not in self.term_names:
+                    name = self.term_server.get_name(term_id)  #FIXME we should keep a cache of this
+                else:
+                    name = self.term_names[term_id]
+
                 if name:
                     name_order.append(name)
                 else:  # term_id isnt a term_id, so probably already a name
