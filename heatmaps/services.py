@@ -42,6 +42,32 @@ SELECT * FROM view_sources LEFT OUTER JOIN source_entity ON REPLACE(view_sources
 SELECT nif_id FROM relation_entity WHERE is_view=TRUE; --burak has a service for this
 """
 
+# sql to update from NULL termcounts to, with an extra check to make sure we never overwrite accidentally
+"""
+UPDATE term_history SET term_counts=%s WHERE id=%s and term_counts IS NULL;
+"""
+
+# sql to retrieve unfinished term counts
+"""
+SELECT * FROM term_history WHERE term_counts IS NULL;
+"""
+# sql to get terms that have finished all terms but have not set a finished date TODO trigger?
+# FIXME will not work as desired :/
+# FIXME argh what do we do when we already have an existing identical heatmap!? well... we have no new rows...
+# I supposed we could insert an equivalence, but we can't insert all the new terms at the same time... and leave them null
+# we would create loads of duplicates, we also don't want to add a row to the junction table 
+# TODO we will add a new heatmap ID so we can give users a link, we will then run as we currently do and if we find existing
+# terms that have not changed we will add those rows to the junction table...
+# if cache isn't dirty... get all the latest entries and check... we do this... if the cache IS dirty
+# go ahead and create a new heatmap prov id and then update or use the latest values from the database
+# HRM in this case we don't even have to hit the database we just can just call it 'old cache' and add a field
+# that has the identifier for the most recent occurence of that term (which we will need to add when we go to the database)
+"""
+SELECT DISTINCT(hp.id) FROM heatmap_prov_to_term_history AS junc
+JOIN heatmap_prov AS hp ON hp.id=junc.heatmap_prov_id
+JOIN term_history AS th ON th.id=junc.term_history_id
+WHERE hp.done_datetime IS NULL AND th.term_counts IS NOT NULL;
+"""
 
 #SHOULD PROV also be handled here?
 #SHOULD odering of rows and columns go here? NO
