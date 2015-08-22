@@ -154,7 +154,7 @@ def do_terms(terms):
     output = """
             <!doctype html>
             <title>Submit</title>
-            Your heatmap can be downloaded as a csv or as a json file at:
+            When your job is finished your heatmap can be downloaded as a png, a csv or as a json file at:
             <br><br>
             <a href={url}.csv>{url}.csv</a>
             <br>
@@ -172,6 +172,9 @@ def data_from_id(hm_id, filetype):
     hm_id = int(hm_id)
     hm_data = hmserv.get_heatmap_data_from_id(hm_id)
     timestamp = hmserv.get_timestamp_from_id(hm_id)
+    timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
+    # start timestamp and done timestamp
+    # just use the existence of the done timestamp to not 404
     if hm_data:
         if filetype == 'csv':
             #out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))  # BAD! number of resource can change, DERP
@@ -204,16 +207,22 @@ terms_form = Form("NIF heatmaps from terms",
                     (HMID, TERMLIST, TERMFILE))
 
 #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
-@hmapp.route(ext_path + "/terms", methods = ['GET','POST'])
+@hmapp.route(ext_path + "/terms", methods = ['GET'])
 def hm_terms():
-    if request.method == 'POST':
-        return terms_form.data_received()
-    else:
-        return terms_form.render()
+    #if request.method == 'POST':
+        #return terms_form.data_received()
+    #else:
+    return terms_form.render()
 
 @hmapp.route(ext_path + "/terms/submit", methods = ['GET', 'POST'])
 def hm_submit():
     if request.method == 'POST':
+        # TODO need WAY more here
+        # specifically we need to return a "job submitted" page
+        # that will have js and do a long poll that will update the
+        # page to tell users that their job is done
+        # this will require reworking when we put things into the database
+        # and possibly the schema :/
         return terms_form.data_received()
     else:
         return "Nothing submited FIXME need to keep session alive??!"
