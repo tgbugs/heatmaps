@@ -403,6 +403,7 @@ class term_service():  # FURL PLS
             record_list = vocab.findById(curie)
             curies, syns, (curie, label) = self.pick_identifier(record_list)
         else:  # we're going to treat it like a term
+            recored_list = vocab.findByTerm(putative_term)
             print('well shit')  # this makes me sad, super slow w/o a resolver w/ a single curie
             # this sucks esp hard when we have birnlex_xxxxxxx prefixed identifiers used with
             # 20 different iri prefixes :/
@@ -531,8 +532,8 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
                  'csv':'text/csv',
                  'json':'application/json',
                  'png':'image/png'}
-    supported_sourceSort = None, 'alpha_id', 'alpha_name', 'uploaded'
-    supported_termSort = None, 'alpha_id', 'alpha_name', 'original', 'uploaded'
+    supported_termSort = 'alpha_id', 'alpha_name', 'original', 'uploaded', 'identifier', 'frequency', 'literature'
+    supported_sourceSort = 'alpha_id', 'alpha_name', 'uploaded', 'identifier', 'frequency'
 
     def __init__(self, summary_server, term_server):
         super().__init__()
