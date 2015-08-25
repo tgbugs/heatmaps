@@ -274,7 +274,9 @@ class term_service():  # FURL PLS
         return cleaned_terms
 
     def get_equiv_classes(self, curie):
-        json = g.getNeighbors(record['curie'], relationshipType='equivalentClass')
+        json = graph.getNeighbors(curie, relationshipType='equivalentClass')
+        if not json:
+            return (curie,), (curie,)
 
         syns = set()
         curies = set()
@@ -285,8 +287,8 @@ class term_service():  # FURL PLS
             if 'synonym' in node['meta']:
                 syns.update(node['meta']['synonym'])  # FIXME lower()?
 
-        return tuple(sorted(curies)), tuple(syns)  # sort for crossrun const
-
+        output = tuple(sorted(curies)), tuple(syns)  # sort for crossrun const
+        return output
 
     def pick_identifier(self, term, record_list):
         """
@@ -297,18 +299,18 @@ class term_service():  # FURL PLS
             rank the subrecords and return the identifiers of all
             equivalent classes of the curie with the highest score
         """
-        score = [[], [], [], [], []]
+        scores = [[], [], [], [], []]
         for record in record_list:
             label = record['labels'][0]
             syns = record['synonyms']
             if term == label:
-                options[0].append(record)
+                scores[0].append(record)
             elif term.lower() == label.lower():
-                options[1].append(record)
+                scores[1].append(record)
             elif term in syns:
-                options[2].append(record)
+                scores[2].append(record)
             elif term.lower() in [s.lower() for s in syns]:
-                options[3].append(record)
+                scores[3].append(record)
             else:
                 continue
 
@@ -320,14 +322,29 @@ class term_service():  # FURL PLS
                 print('record found at score', score)
                 if len(records) == 1:
                     record = records[0]
-                    curies, syns = self.get_equiv_classes(record['curie'])
-                    return curies, syns, (record['curie'], record['labels'][0])
+                    curie = record['curie']
+                    new_cs, new_syns = self.get_equiv_classes(curie)
+                    return new_cs, new_syns, (record['curie'], record['labels'][0])
                 else:  # CURIE preference ordering if there are multiples at the same lvl
                     # cscore will be by max number of matching equiv curies (min is 1)
                     # that is 1 then we fail over to total equiv curies
                     # then number of syns
                     # all else fails we go alpha on the curie
-                    curies_labels = [t for t in zip(*sorted([(r['curie'], r['labels']) for r in records]))]
+                    curies = [r['curie'] for r in records]
+                    #"""
+                    # careful with curies that are None, need to fix that in nifstd :/
+                    curies_labels = [t for t in sorted([(r['curie'], r['labels'][0])
+                                                        for r in records if r['curie'] is not None])]
+                    """  # if you need this code you are probably missing a curie somewhere
+                    for r in records:
+                        c = r['curie']
+                        l = r['labels'][0]
+                        if c is None or l is None:
+                            embed()
+
+                    curies_labels = [t for t in sorted([(r['curie'] if r['curie'] else '###### WTF M8',
+                                                         r['labels'][0] if r['labels'][0] else '###### WTF M8') for r in records])]
+                    #"""
                     output_curies = None
                     output_syns = None
                     oc = None
@@ -337,11 +354,13 @@ class term_service():  # FURL PLS
                     s_total_equiv = 0
                     s_total_syns = 0
                     for c, l in curies_labels:
-                        new_cs, syns = self.get_equiv_classes(c)
+                        new_cs, new_syns = self.get_equiv_classes(c)
                         if new_cs == curies:  # they're all equivalent classes
-                            return new_cs, syns
+                            oc, ol = c, l
+                            print('ALL SYNONYMS CASE')
+                            return new_cs, new_syns, (oc, ol)
 
-                        match = len(set(new_cs).intersect(set(curies)))
+                        match = len(set(new_cs).intersection(set(curies)))
 
                         if match > s_total_match:
                             output_curies = new_cs
@@ -368,9 +387,7 @@ class term_service():  # FURL PLS
 
                     return output_curies, output_syns, (oc, ol)
 
-        return None, None
-
-        
+        return (), (term,), (None, None)  # all fail terms are own syns
 
     def term_id_expansion(self, putative_term):  # FIXME NOT deterministic wrt changes in scigraph
         # TODO do we need to store raw term -> id mappings?! we want to collect terms that have no hits
@@ -394,19 +411,39 @@ class term_service():  # FURL PLS
 
             return the exact query string to run on services
         """
+        if type(putative_term) is not str:
+            raise TypeError('putative term is not a string! %s' % str(putative_term))
 
-        record_list = vocab.findById(putative_term)  # assume its a curie and try
-        if record_list:  # it is a curie
-            curies, syns, (curie, label) = self.pick_identifier(record_list)
-        elif putative_term.split('_')[0] in self.known_curies:  # it is a fragment
+        # curie or fragment
+        if putative_term.split(':')[0] in self.known_curies or putative_term.split('_')[0] in self.known_curies:
             curie = putative_term.replace('_', ':')
-            record_list = vocab.findById(curie)
-            curies, syns, (curie, label) = self.pick_identifier(record_list)
-        else:  # we're going to treat it like a term
-            recored_list = vocab.findByTerm(putative_term)
-            print('well shit')  # this makes me sad, super slow w/o a resolver w/ a single curie
             # this sucks esp hard when we have birnlex_xxxxxxx prefixed identifiers used with
             # 20 different iri prefixes :/
+            record_list = vocab.findById(curie)  # assume its a curie and try
+            if type(record_list) is dict:  # heh, stupid hack
+                record_list = [record_list]
+        else:
+            curie = None
+            record_list = vocab.findByTerm(putative_term)
+
+        if record_list:  # it is a curie
+            if curie is not None:
+                if len(record_list) == 1:
+                    record = record_list[0]
+                    curie = record['curie']
+                    label = record['labels'][0]
+                    if curie != putative_term.replace('_',':'):  # matches both _ and : versions
+                        raise TypeError('%s != %s' % (curie, putative_term))
+                    curies, syns = self.get_equiv_classes(curie)
+                else:
+                    embed()
+                    raise TypeError('WAT')
+            else:  # we're going to treat it like a term
+                curies, syns, (curie, label) = self.pick_identifier(putative_term, record_list)
+        else:
+            curie = None
+            label = None
+            syns = (putative_term,)
 
         # check if it is a term, a fragment, or a curie
         # try to expand terms to identifiers
@@ -414,7 +451,7 @@ class term_service():  # FURL PLS
         # guess agressively that terms with '_' in them are identifiers
         # same goes for things that look like curies
 
-        query = ' AND '
+        query = ' AND '.join(syns)
 
         return putative_term, curie, label, query
 
