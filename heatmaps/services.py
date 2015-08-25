@@ -23,7 +23,7 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
-from .visualization import heatmap_data_processing, dict_to_matrix, sCollapseToSrcId, make_png
+from .visualization import applyCollapse, dict_to_matrix, sCollapseToSrcId, make_png
 from .scigraph_client import Graph, Vocabulary
 
 # initilaize scigraph services
@@ -654,15 +654,15 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         if id_ in self.resources:
             return self.resources[id_]
         else:  # it's a term!
-            if term_id not in self.term_names:
-                name = self.term_server.get_name(term_id)
+            if id_ not in self.term_names:
+                name = self.term_server.get_name(id_)
                 if name:
-                    self.term_names[term_id] = name
+                    self.term_names[id_] = name
                     return name
                 else:
                     return id_
             else:
-                name = self.term_names[term_id]
+                name = self.term_names[id_]
                 return name
 
     def get_names_from_ids(self, id_order):
@@ -791,7 +791,8 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
 
         return hm_data, hp_id, timestamp
 
-    def output_csv(self, matrix, term_name_order, src_name_order, term_id_order, src_id_order, sep=",", export_ids=True):
+    def output_csv(self, matrix, term_name_order, src_name_order, term_id_order,
+                   src_id_order, *args, sep=",", export_ids=True, **kwargs):
         """ consturct a csv file on the fly for download response """
         #this needs access id->name mappings
         #pretty sure I already have this written?
@@ -820,27 +821,21 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
                 line = term_name + sep + sep.join(str(i) for i in row) + "\n"
                 csv_string += line
 
-        return csv_string
+        return csv_string, self.mimetypes['csv']
 
-    def output_json(self, heatmap_data, *args):
+    def output_json(self, heatmap_data, *args, **kwargs):
         """ return a json object with the raw data and the src_id and term_id mappings """
-        return simplejson.dumps(heatmap_data)
+        return simplejson.dumps(heatmap_data), self.mimetypes['json']
 
-    def output_png(self, matrix, term_name_order, src_name_order, *args):#, term_id_order, src_id_order):
-        termCollapse = None
-        #id_name_dict = {id_:' '.join(name_tup) for id_, name_tup in self.resources.items()}
-        id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
-        sourceCollapse, src_id_name_dict = sCollapseToSrcId(heatmap_data[TOTAL_TERM_ID], id_name_dict)
-        termOrder = sorted(heatmap_data)
-        sourceOrder, sourceNames = [c for c in zip(*sorted([(k, v) for k, v in src_id_name_dict.items()], key=lambda a: a[1]))]
-        matrix = heatmap_data_processing(heatmap_data, termCollapse, sourceCollapse, termOrder, sourceOrder)
-        title = 'heatmap for ...'
-        row_names = self.get_names_from_ids(termOrder)
-        col_names = sourceNames
+    def output_png(self, matrix, term_name_order, src_name_order, *args, title='heatmap', **kwargs):
+        row_names = term_name_order
+        col_names = src_name_order
         png = make_png(matrix, row_names, col_names, title)
-        return png
+        return png, self.mimetypes['png']
 
-    def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None, collTerms=None, collSources=None):
+    def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,
+               collTerms=None, collSources=None, idSortTerms=None, idSortSources=None,
+               ascTerms=True, ascSources=True):
         """
             Provide a single API for all output types.
         """
@@ -851,19 +846,31 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
 
         heatmap_data = self.get_heatmap_data_from_id(heatmap_id)
         if not heatmap_data:
-            return None, "No heatmap with that ID!"
+            return None, "No heatmap with that ID!", None
 
-        if filetype == 'json':  # FIXME FIXME FIXME ARGH well... it is the only unsorted type
-            return output_function(heatmap_data)
+        timestamp = self.get_timestamp_from_id(heatmap_id)  # FIXME start/done timestamp? no answer to the yet :/
+        timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
+        filename = 'nif_heatmap_%s_%s.%s' % (heatmap_id, timestamp, filetype)
 
-        # collapse rules (need to go in their own function)
-        if CollTerms == 'cheese':
+        #if filetype == 'json':  # FIXME FIXME FIXME ARGH well... it is the only unsorted type
+            #representation, mimetype = output_function(heatmap_data)
+            #return representation, filename, mimetype
+
+        # collapse rules and execution (need to go in their own function)
+        # terms
+        if collTerms == 'cheese':
             term_coll_function = lambda heatmap_data, term_id_name_dict: heatmap_data, term_id_name_dict
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
         else:
             term_coll_function = None
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
 
+        if term_coll_function:
+            term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
+        else:
+            term_id_coll_dict = None
+
+        # sources
         if collSources == 'cheese':
             src_coll_function = lambda heatmap_data_ttid, src_id_name_dict: heatmap_data_ttid, src_id_name_dict
             src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
@@ -872,46 +879,91 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         else:
             src_coll_function = None
-            src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
+            src_id_name_dict = {id_:' '.join(self.get_name_from_id(id_)) for id_ in heatmap_data[TOTAL_TERM_ID]}
 
-        term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
-        src_id_coll_dict, src_id_name_dict = src_coll_function(heatmap_data[TOTAL_TERM_ID], src_id_name_dict)
+        if src_coll_function:
+            src_id_coll_dict, src_id_name_dict = src_coll_function(heatmap_data[TOTAL_TERM_ID], src_id_name_dict)
+        else:
+            src_id_coll_dict = None
+
+        # apply the collapse dicts to the data, need to do before sorting for some sort options
+        if term_id_coll_dict:
+            heatmap_data = applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
+
+        if src_id_coll_dict:
+            heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
 
         # sort options are drawn from this class and do not accept arbitrary input
         # TODO this needs to go in its own method
 
+        ascTerms = 1 if ascTerms else -1
+        ascSources = 1 if ascSources else -1
         if sortTerms == 'original':
             term_id_sort = sorted
-            orig_order = self.heatmap_term_order[heatmap_id]  # FIXME key errors wooo!
-            term_id_key = lambda x: orig_order.index(x[0])
-        else:
+            if heatmap_id in self.heatmap_term_order:  # FIXME mutex with term collapse
+                orig_order = self.heatmap_term_order[heatmap_id]
+                term_id_key = lambda x: orig_order.index(x[0])
+            else:
+                print('Original failed using alpha for terms for heatmap', heatmap_id)
+                term_id_key = lambda x: x[1]  # FIXME nasty nasty hidden hack
+                #return None, 'Original order no longer on the server :(', None
+        elif sortTerms == 'alpha_id':
             term_id_sort = sorted
-            term_id_key = None
+            term_id_key = lambda x: x[0]
+        elif sortTerms == 'alpha_name':
+            term_id_sort = sorted
+            term_id_key = lambda x: x[1]
+        elif sortTerms == 'literature':
+            # sort by number of literature results
+            term_id_sort = sorted
+            term_id_key = lambda x: ascTerms * heatmap_data[x[0]].get(LITERATURE_ID, 0)
+        elif sortTerms == 'identifier':
+            # sort by number of results w/in a given datasources
+            term_id_sort = sorted
+            term_id_key = lambda x: ascTerms * heatmap_data[x[0]].get(idSortTerms, 0)
+        elif sortTerms == 'frequency':
+            # sort by total number of sources w/ 1 or more hits
+            term_id_sort = sorted
+            term_id_key = lambda x: ascTerms * len([v for v in heatmap_data[x[0]].values() if v > 0])
+        else:  # FIXME we shouldn't need this
+            term_id_sort = sorted
+            term_id_key = lambda x: x[0]
 
+        # sources
         if sortSources == 'alpha_id':
             src_id_sort = sorted
             src_id_key = lambda x: x[0]
         elif sortSources == 'alpha_name':
             src_id_sort = sorted
             src_id_key = lambda x: x[1]
+        elif sortSources == 'frequency':
+            # number terms that appear in this source NOT the sum of all counts
+            src_id_sort = sorted
+            src_id_key = lambda x: ascSources * len([v for v in heatmap_data.values() if x[0] in v])
+        elif sortSources == 'identifier':
+            # sort based on the (normalized) number of results for a given term identifier
+            src_id_sort = sorted
+            src_id_key = lambda x: ascSources * heatmap_data[idSortSources].get(x[0], 0) / heatmap_data[TOTAL_TERM_ID][x[0]]
         else:
             src_id_sort = sorted
             src_id_key = lambda x: x[0]
 
-        term_id_order, term_name_order = [c for c in zip(*term_id_sort([(id_, name_)
-                                            for id_, name in term_id_name_dict.items()], key=src_id_key))]
+        print('sortTerms', sortTerms, 'sortSources', sortSources)
 
-        src_id_order, src_name_order = [c for c in zip(*src_id_sort([(id_, name_)
+        # derive the id and name orders from the sort function
+        term_id_order, term_name_order = [c for c in zip(*term_id_sort([(id_, name)
+                                            for id_, name in term_id_name_dict.items()], key=term_id_key))]
+
+        src_id_order, src_name_order = [c for c in zip(*src_id_sort([(id_, name)
                                           for id_, name in src_id_name_dict.items()], key=src_id_key))]
+        # deal with dict vs matrix representation of the data
+        if filetype in ('json', None):
+            matrix = heatmap_data
+        else:
+            matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
 
-        matrix = heatmap_data_processing(heatmap_data, term_id_coll_dict, src_id_coll_dict, term_id_order, src_id_order)
+        representation, mimetype = output_function(matrix, term_name_order, src_name_order, term_id_order, src_id_order)
 
-        representation = output_function(matrix, term_name_order, src_name_order, term_id_order, src_id_order)
-
-        timestamp = self.get_timestamp_from_id(hm_id)  # FIXME start/done timestamp? no answer to the yet :/
-        timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
-        filename = 'nif_heatmap_%s_%s.%s' % (heatmap_id, timestamp, filetype)
-        mimetype = self.mimetypes[filetype]
         return representation, filename, mimetype
 
 

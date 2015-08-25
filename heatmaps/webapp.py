@@ -170,7 +170,22 @@ def do_terms(terms):
 
 def data_from_id(hm_id, filetype):
     hm_id = int(hm_id)
-    data, filename, mimetype = hmserv.output(hm_id, filetype)
+    collTerms = None
+    if filetype == 'png':
+        collSources = 'collapse views to sources'
+    else:
+        collSources = None
+
+    sortTerms = 'literature'
+    sortTerms = 'frequency'
+    sortSources = 'identifier'
+    sortSources = 'frequency'
+    idSortTerms = None  # note: should be a SOURCE identifier
+    idSortSources = 'Sleep'
+    idSortSources = None  # note: should be a TERM identifier
+    ascTerms = False
+    ascSources = True
+    data, filename, mimetype = hmserv.output(hm_id, filetype, sortTerms, sortSources, collTerms, collSources, idSortTerms, idSortSources, ascTerms, ascSources)
     if data:
         if filetype == 'csv':
             attachment = 'attachment; '
