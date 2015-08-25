@@ -170,35 +170,18 @@ def do_terms(terms):
 
 def data_from_id(hm_id, filetype):
     hm_id = int(hm_id)
-    hm_data = hmserv.get_heatmap_data_from_id(hm_id)
-    timestamp = hmserv.get_timestamp_from_id(hm_id)
-    timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
-    # start timestamp and done timestamp
-    # just use the existence of the done timestamp to not 404
-    if hm_data:
+    data, filename, mimetype = hmserv.output(hm_id, filetype)
+    if data:
         if filetype == 'csv':
-            #out = hmserv.output_csv(hm_data, sorted(hm_data), sorted(hmserv.resources))  # BAD! number of resource can change, DERP
-            out = hmserv.output_csv(hm_data)
-            response = make_response(out)  #FIXME get ur types straight
-            response.headers['Content-Disposition'] = "attachment; filename = nif_heatmap_%s_%s.csv" % (hm_id, timestamp)
-            response.mimetype = 'text/csv'
-        elif filetype == 'png':
-            out = hmserv.output_png(hm_data)
-            response = make_response(out)
-            response.headers['Content-Disposition'] = "filename = nif_heatmap_%s_%s.png" % (hm_id, timestamp)
-            response.mimetype = 'image/png'
-        elif filetype == 'json' or filetype == None:
-            out = hmserv.output_json(hm_data)
-            response = make_response(out)  #FIXME get ur types straight
-            response.headers['Content-Disposition'] = "filename = nif_heatmap_%s_%s.json" % (hm_id, timestamp)
-            response.mimetype = 'application/json'
+            attachment = 'attachment; '
         else:
-            return abort(404)  # XXX NOTE this should be handled earlier
+            attachment = ''
+        response = make_response(data)
+        response.headers['Content-Disposition'] = '%sfilename = %s' % (attachment, filename)
+        response.mimetype = mimetype
         return response
     else:
         return abort(404)
-        #return "No heatmap with id %s." % hm_id  #FIXME TYPES!!!
-    #return request.form[name]
 
 
 terms_form = Form("NIF heatmaps from terms",

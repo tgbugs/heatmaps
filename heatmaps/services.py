@@ -527,17 +527,27 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
     port = 5432
     TERM_MIN = 5
     supported_filetypes = None, 'csv', 'json', 'png'
+    mimetypes = {None:'text/plain',
+                 'csv':'text/csv',
+                 'json':'application/json',
+                 'png':'image/png'}
+    supported_sourceSort = None, 'alpha_id', 'alpha_name', 'uploaded'
+    supported_termSort = None, 'alpha_id', 'alpha_name', 'original', 'uploaded'
+
     def __init__(self, summary_server, term_server):
         super().__init__()
         self.summary_server = summary_server
         self.term_server = term_server
         self.term_count_dict = {TOTAL_TERM_ID:{}}  # makes init play nice
         self.term_names = {TOTAL_TERM_ID:TOTAL_TERM_ID_NAME}  #FIXME these dicts may need to be ordered so we don't use too much memory
+        self.heatmap_term_order = {}  # temp store of the original order
         self.resources = None
         self.check_counts()
-        output_map = {  # FIXME UNUSED
+        self.output_map = {
+            None:self.output_json,
             'json':self.output_json,
             'csv':self.output_csv,
+            'png':self.output_png,
                      }
 
     def check_counts(self):
@@ -639,6 +649,21 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             same issue with the orders, the order service should probably stay
             with the ontology server
         """
+
+    def get_name_from_id(self, id_):
+        if id_ in self.resources:
+            return self.resources[id_]
+        else:  # it's a term!
+            if term_id not in self.term_names:
+                name = self.term_server.get_name(term_id)
+                if name:
+                    self.term_names[term_id] = name
+                    return name
+                else:
+                    return id_
+            else:
+                name = self.term_names[term_id]
+                return name
 
     def get_names_from_ids(self, id_order):
         """ consistent way to get the names for term or src ids
@@ -760,18 +785,19 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
 
         #commit it (probably wrap this in a try/except)
         self.conn.commit()
+        
+        #store the original order of the terms in memory for now, maybe allow reup later w/ specific orders from elsewhere
+        self.heatmap_term_order[hp_id] = terms
 
         return hm_data, hp_id, timestamp
 
-    def output_csv(self, heatmap_data, sep=",", export_ids=True):
+    def output_csv(self, matrix, term_name_order, src_name_order, term_id_order, src_id_order, sep=",", export_ids=True):
         """ consturct a csv file on the fly for download response """
-        term_id_order = sorted(heatmap_data)
-        src_id_order = sorted(heatmap_data[TOTAL_TERM_ID])
         #this needs access id->name mappings
         #pretty sure I already have this written?
-        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
-        term_names = ['"%s"' % n if sep in n else n for n in self.get_names_from_ids(term_id_order)]
-        src_names = ['"%s"' % n if sep in n else n for n in self.get_names_from_ids(src_id_order)]
+        #matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
+        term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
+        src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
         term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
         src_id_order = ['"%s"' % n if sep in n else n for n in src_id_order]  # probably dont need this here
 
@@ -796,11 +822,11 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
 
         return csv_string
 
-    def output_json(self, heatmap_data):
+    def output_json(self, heatmap_data, *args):
         """ return a json object with the raw data and the src_id and term_id mappings """
         return simplejson.dumps(heatmap_data)
 
-    def output_png(self, heatmap_data):
+    def output_png(self, matrix, term_name_order, src_name_order, *args):#, term_id_order, src_id_order):
         termCollapse = None
         #id_name_dict = {id_:' '.join(name_tup) for id_, name_tup in self.resources.items()}
         id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
@@ -813,6 +839,81 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         col_names = sourceNames
         png = make_png(matrix, row_names, col_names, title)
         return png
+
+    def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None, collTerms=None, collSources=None):
+        """
+            Provide a single API for all output types.
+        """
+        if filetype not in self.output_map:
+            return None, "Unsupportred filetype!"
+        else:
+            output_function = self.output_map[filetype]
+
+        heatmap_data = self.get_heatmap_data_from_id(heatmap_id)
+        if not heatmap_data:
+            return None, "No heatmap with that ID!"
+
+        if filetype == 'json':  # FIXME FIXME FIXME ARGH well... it is the only unsorted type
+            return output_function(heatmap_data)
+
+        # collapse rules (need to go in their own function)
+        if CollTerms == 'cheese':
+            term_coll_function = lambda heatmap_data, term_id_name_dict: heatmap_data, term_id_name_dict
+            term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
+        else:
+            term_coll_function = None
+            term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
+
+        if collSources == 'cheese':
+            src_coll_function = lambda heatmap_data_ttid, src_id_name_dict: heatmap_data_ttid, src_id_name_dict
+            src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
+        elif collSources == 'collapse views to sources':
+            src_coll_function = sCollapseToSrcId
+            src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+        else:
+            src_coll_function = None
+            src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
+
+        term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
+        src_id_coll_dict, src_id_name_dict = src_coll_function(heatmap_data[TOTAL_TERM_ID], src_id_name_dict)
+
+        # sort options are drawn from this class and do not accept arbitrary input
+        # TODO this needs to go in its own method
+
+        if sortTerms == 'original':
+            term_id_sort = sorted
+            orig_order = self.heatmap_term_order[heatmap_id]  # FIXME key errors wooo!
+            term_id_key = lambda x: orig_order.index(x[0])
+        else:
+            term_id_sort = sorted
+            term_id_key = None
+
+        if sortSources == 'alpha_id':
+            src_id_sort = sorted
+            src_id_key = lambda x: x[0]
+        elif sortSources == 'alpha_name':
+            src_id_sort = sorted
+            src_id_key = lambda x: x[1]
+        else:
+            src_id_sort = sorted
+            src_id_key = lambda x: x[0]
+
+        term_id_order, term_name_order = [c for c in zip(*term_id_sort([(id_, name_)
+                                            for id_, name in term_id_name_dict.items()], key=src_id_key))]
+
+        src_id_order, src_name_order = [c for c in zip(*src_id_sort([(id_, name_)
+                                          for id_, name in src_id_name_dict.items()], key=src_id_key))]
+
+        matrix = heatmap_data_processing(heatmap_data, term_id_coll_dict, src_id_coll_dict, term_id_order, src_id_order)
+
+        representation = output_function(matrix, term_name_order, src_name_order, term_id_order, src_id_order)
+
+        timestamp = self.get_timestamp_from_id(hm_id)  # FIXME start/done timestamp? no answer to the yet :/
+        timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
+        filename = 'nif_heatmap_%s_%s.%s' % (heatmap_id, timestamp, filetype)
+        mimetype = self.mimetypes[filetype]
+        return representation, filename, mimetype
+
 
     def __repr__(self):
         a = str(self.resources).replace('),','),\n')+'\n'
