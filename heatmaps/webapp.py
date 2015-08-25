@@ -204,6 +204,31 @@ terms_form = Form("NIF heatmaps from terms",
                     ('text','text','file'),
                     (HMID, TERMLIST, TERMFILE))
 
+@hmapp.route(ext_path + "/explore/<hm_id>", methods = ['GET'])
+def hm_explore(hm_id):
+    hm_id = int(hm_id)
+    timestamp = hmserv.get_timestamp_from_id(hm_id)
+    if not timestamp:
+        return abort(404)
+    else:
+        date, time = timestamp.split('T')
+    heatmap_data = hmserv.get_heatmap_data_from_id(hm_id)
+
+    sorting_ops = '<br>'.join(hmserv.supported_termSort)
+    term_ids = '<br>'.join(sorted(heatmap_data))
+    page = """
+    <!doctype html>
+    <title>NIF Heatmap {hm_id} exploration</title>
+    <h1>Explore heatmap {hm_id}</h1>
+    <h2>Created on: {date} at {time}</h2>
+    <h3>Sorting Options:</h3>
+    {sorting_ops}
+    <h3>Terms:</h3>
+    {term_ids}
+    """.format(hm_id=hm_id, date=date, time=time, term_ids=term_ids, sorting_ops=sorting_ops)
+
+    return page
+
 #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
 @hmapp.route(ext_path + "/terms", methods = ['GET'])
 def hm_terms():
