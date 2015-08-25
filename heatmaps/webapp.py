@@ -216,16 +216,31 @@ def hm_explore(hm_id):
 
     sorting_ops = '<br>'.join(hmserv.supported_termSort)
     term_ids = '<br>'.join(sorted(heatmap_data))
-    page = """
-    <!doctype html>
-    <title>NIF Heatmap {hm_id} exploration</title>
-    <h1>Explore heatmap {hm_id}</h1>
-    <h2>Created on: {date} at {time}</h2>
-    <h3>Sorting Options:</h3>
-    {sorting_ops}
-    <h3>Terms:</h3>
-    {term_ids}
-    """.format(hm_id=hm_id, date=date, time=time, term_ids=term_ids, sorting_ops=sorting_ops)
+    tuples = [[v if v is not None else '' for v in hmserv.term_server.term_id_expansion(term)]
+              for term in heatmap_data]
+    cols = [c for c in zip(*tuples)]
+    justs = [max([len(s) for s in col]) + 1 for col in cols]
+    cols2 = []
+    for i, just in enumerate(justs):
+        cols2.append([s.ljust(just) for s in cols[i]])
+
+    titles = ''.join([s.ljust(just) for s, just
+                      in zip(('Input', 'CURIE', 'Label', 'Query'), justs)])
+
+    rows = [titles] + sorted([''.join(r) for r in zip(*cols2)])
+    expansion = '<pre>' + '\n'.join(rows) + '</pre>'
+
+    page = """<!doctype html>
+<title>NIF Heatmap {hm_id} exploration</title>
+<h1>Explore heatmap {hm_id}</h1>
+<h2>Created on: {date} at {time}</h2>
+<h3>Sorting Options:</h3>
+{sorting_ops}
+<h3>Terms:</h3>
+{term_ids}<br>
+<h3>Expansion: putative term, curie, label, query</h3>
+{expansion}""".format(hm_id=hm_id, date=date, time=time, term_ids=term_ids,
+               sorting_ops=sorting_ops, expansion=expansion)
 
     return page
 
