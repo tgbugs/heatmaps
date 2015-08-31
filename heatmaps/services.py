@@ -866,6 +866,9 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         return simplejson.dumps(heatmap_data), self.mimetypes['json']
 
     def output_png(self, matrix, term_name_order, src_name_order, *args, title='heatmap', **kwargs):
+        limit = 900
+        if len(matrix) > 900:
+            return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
         row_names = term_name_order
         col_names = src_name_order
         png = make_png(matrix, row_names, col_names, title)
