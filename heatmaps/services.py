@@ -283,7 +283,8 @@ class term_service():  # FURL PLS
 
         for node in json['nodes']:
             curies.add(node['id'])
-            syns.add(node['lbl'])
+            if node['lbl'] is not None:  # sometimes it happens! :/
+                syns.add(node['lbl'])
             if 'synonym' in node['meta']:
                 syns.update(node['meta']['synonym'])  # FIXME lower()?
 
