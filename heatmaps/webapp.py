@@ -200,9 +200,9 @@ def data_from_id(hm_id, filetype):
 
 
 terms_form = Form("NIF heatmaps from terms",
-                    ("Heatmap ID (int)","Term list (comma separated)", "Term file (newline separated)"),  #TODO select!
-                    ('text','text','file'),
-                    (HMID, TERMLIST, TERMFILE))
+                    ("Term list (comma separated)", "Term file (newline separated)"),  #TODO select!
+                    ('text','file'),
+                    (TERMLIST, TERMFILE))
 
 @hmapp.route(ext_path + "/explore/<hm_id>", methods = ['GET'])
 def hm_explore(hm_id):
