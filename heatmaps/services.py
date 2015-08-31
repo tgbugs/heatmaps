@@ -652,7 +652,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         else:
             return None
 
-    def get_term_counts(self, *terms):  #FIXME this fails if given an id!
+    def get_term_counts(self, terms, *args, retry=True):  #FIXME this fails if given an id!
         """ given a collection of terms returns a dict of dicts of their counts
             this is where we make calls to summary_server, we are currently handling
             term failures in here which seems to make sense for time efficiency
@@ -676,6 +676,10 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             term_count_dict[term] = nifid_count
 
         if failed_terms: print("Failed terms: ", failed_terms)
+        
+        #try the failed terms again, if the issue was a long timeout it should be cached by now
+        if failed_terms and retry:
+            term_count_dict, failed_terms = self.get_term_counts(failed_terms, retry=False)
         return term_count_dict, failed_terms
 
     def get_terms_from_ontology(self, term):
@@ -735,7 +739,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         return name_order
 
     @sanitize_input
-    def make_heatmap_data(self, *terms):  # FIXME error handling
+    def make_heatmap_data(self, terms):  # FIXME error handling
         # SUEPER DUPER FIXME this has to be converted to async :/ preferably in webapp.py
         # FIXME FIXME, caching and detection of existing heatmaps is BROKEN
         # 1) we invalidate caches incorrectly and we can be fooled by a cached
@@ -748,7 +752,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             this is also where we will check to see if everything is up to date
         """
         self.check_counts() #call to * to validate counts
-        hm_data, fails = self.get_term_counts(*terms)  # call this internally to avoid race conds
+        hm_data, fails = self.get_term_counts(terms)  # call this internally to avoid race conds
         
         terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM_ID
 

@@ -146,7 +146,7 @@ def do_terms(terms):
     if not terms:
         print('no terms!')
         return None
-    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(*terms)
+    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(terms)
     if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
         return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
     #return repr((hm_data, hp_id, timestamp))
@@ -218,6 +218,7 @@ def hm_explore(hm_id):
     term_ids = '<br>'.join(sorted(heatmap_data))
     tuples = [[v if v is not None else '' for v in hmserv.term_server.term_id_expansion(term)]
               for term in heatmap_data]
+    num_matches = len([t for t in tuples if t[1]])
     cols = [c for c in zip(*tuples)]
     justs = [max([len(s) for s in col]) + 1 for col in cols]
     cols2 = []
@@ -236,11 +237,14 @@ def hm_explore(hm_id):
 <h2>Created on: {date} at {time}</h2>
 <h3>Sorting Options:</h3>
 {sorting_ops}
+<h3>Number of terms: {num_terms}</h3>
+<h3>Terms found in ontology: {num_matches}</h3>
 <h3>Terms:</h3>
 {term_ids}<br>
 <h3>Expansion: putative term, curie, label, query</h3>
 {expansion}""".format(hm_id=hm_id, date=date, time=time, term_ids=term_ids,
-               sorting_ops=sorting_ops, expansion=expansion)
+                      sorting_ops=sorting_ops, expansion=expansion,
+                      num_terms=len(heatmap_data), num_matches=num_matches)
 
     return page
 
@@ -310,8 +314,13 @@ def docs():
     To view an existing heatmap append the heatmapid to the following url: <br>
     <a href={prov_url}>{prov_url}</a><br>
     Currently supported filetypes are csv, json, and png. <br>
-    Example: <a href={prov_url}0.png>{prov_url}0.png</a> (note that this heatmap doesn't actually exist)
-    """.format(prov_url=base_url + ext_path + '/prov/')
+    Example: <a href={prov_url}0.png>{prov_url}0.png</a> (note that this heatmap doesn't actually exist) <br>
+    <br>
+    To explore an existing heatmap append the heatmapid to the following url: <br>
+    <a href={explore_url}>{explore_url}</a><br>
+    Example: <a href={explore_url}0.png>{explore_url}0</a>
+    """.format(prov_url=base_url + ext_path + '/prov/',
+               explore_url=base_url + ext_path + '/explore/')
     return page
 
 
@@ -344,7 +353,7 @@ def terms_POST():
         return repr(term_list)
     else:
         return None
-    hm_data, fails = hmserv.get_term_counts(*terms)
+    hm_data, fails = hmserv.get_term_counts(terms)
     ###return repr(hm_data) + "\n\n" + str(fails)
     #return repr(terms)
 
