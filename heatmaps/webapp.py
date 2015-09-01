@@ -254,7 +254,15 @@ def hm_terms():
     #if request.method == 'POST':
         #return terms_form.data_received()
     #else:
-    return terms_form.render()
+    page = terms_form.render()
+    page += """<br>
+    Submit a comma separated list of terms or a newline separated file of terms. <br>
+    If both are provided the comma separated list will be preferred. <br>
+    Building heatmaps can take a long time. Once you hit submit you may have to wait <br>
+    as long as 30 minutes (if you have thousands of terms) for your heatmap to finish. <br>
+    If you submit less than %s terms the heatmap will not be saved.
+    """ % hmserv.TERM_MIN
+    return page
 
 @hmapp.route(ext_path + "/terms/submit", methods = ['GET', 'POST'])
 def hm_submit():
