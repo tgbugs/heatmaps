@@ -11,7 +11,7 @@
 
 import simplejson
 from functools import wraps
-from os import environ
+from os import environ, path
 
 import requests
 import psycopg2 as pg
@@ -874,6 +874,10 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         limit = 900
         if len(matrix) > 900:
             return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
+
+        if title.endswith('.png'):
+            title = title[:-4]
+
         row_names = term_name_order
         col_names = src_name_order
         png = make_png(matrix, row_names, col_names, title)
@@ -1008,7 +1012,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         else:
             matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
 
-        representation, mimetype = output_function(matrix, term_name_order, src_name_order, term_id_order, src_id_order)
+        representation, mimetype = output_function(matrix, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
 
