@@ -94,7 +94,7 @@ WHERE hp.done_datetime IS NULL AND th.term_counts IS NOT NULL;
 SCIGRAPH = "http://matrix.neuinfo.org:9000"
 LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
 TOTAL_TERM_ID = 'federation_totals'  # FIXME we need to come up with a name for this though because * is reserved in sql
-TOTAL_TERM_ID_NAME = 'Totals'
+TOTAL_TERM_ID_NAME = 'Federation Totals'
 
 ###
 #   Decorators
@@ -134,7 +134,8 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
             else:
                 return response.text
         else:
-            raise ConnectionError("Get of %s failed %s %s"%(url, response.status_code, response.reason))
+            print("Get of %s failed %s %s" % (url, response.status_code, response.reason))
+            raise ConnectionError("Get of %s failed %s %s" % (url, response.status_code, response.reason))
 
     def xpath(self, xml, *queries):
         """ Run a set of xpath queries. """
@@ -548,7 +549,7 @@ class database_service:  # FIXME reimplement with asyncio?
             cur.close()
 
 
-class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
+class heatmap_service(database_service):
     """ The monolithic heatmap service that keeps a cache of the term counts
         as well as term names and resource names/indexable status
 
@@ -672,6 +673,9 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
                 except requests.exceptions.ReadTimeout:
                     failed_terms.append(term)
                     continue  # drop the term from the results
+                except ConnectionError:
+                    failed_terms.append(term)
+                    continue
 
             term_count_dict[term] = nifid_count
 
@@ -756,7 +760,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
         
         terms = tuple(hm_data)  # prevent stupidity with missing TOTAL_TERM_ID
 
-        if len(terms) < self.TERM_MIN:  #TODO need to pass error back out for the web
+        if len(terms) <= self.TERM_MIN:  #TODO need to pass error back out for the web
             message = "We do not mint DOIS for heatmaps with less than %s terms."%self.TERM_MIN
             print(message)
             return hm_data, None, message
@@ -967,7 +971,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             # sort by number of literature results
             term_id_sort = sorted
             term_id_key = lambda x: ascTerms * heatmap_data[x[0]].get(LITERATURE_ID, 0)
-        elif sortTerms == 'identifier':
+        elif sortTerms == 'identifier' and idSortTerms:  # FIXME idSortTerms is being used in 2 different waysdepending on whether it is a term or a source :/
             # sort by number of results w/in a given datasources
             term_id_sort = sorted
             term_id_key = lambda x: ascTerms * heatmap_data[x[0]].get(idSortTerms, 0)
@@ -975,7 +979,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             # sort by total number of sources w/ 1 or more hits
             term_id_sort = sorted
             term_id_key = lambda x: ascTerms * len([v for v in heatmap_data[x[0]].values() if v > 0])
-        elif 'jaccard_term':
+        elif 'jaccard_term' and idSortTerms:
             term_id_sort = sorted
             def term_id_key(x):
                 ref = heatmap_data[idSortTerms]
@@ -986,8 +990,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
 
                 return len(ref.intersection(targ))/len(ref.union(targ))
 
-            
-        elif 'num_common_sources_term':
+        elif 'num_common_sources_term' and idSortTerms:
             # count how many sources overlap (no distance)
             term_id_sort = sorted
             def term_id_key(x):
@@ -1000,7 +1003,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
 
                 return rank
 
-        elif sortTerms == 'norm_from_term':
+        elif sortTerms == 'norm_from_term' and idSortTerms:
             # distace between terms in number-of-sources dimensional space :/
             term_id_sort = sorted
             def term_id_key(x):
@@ -1019,7 +1022,6 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
 
                 return sum(diffs.values()) ** .5
 
-
         else:  # FIXME we shouldn't need this
             term_id_sort = sorted
             term_id_key = lambda x: x[0]
@@ -1035,7 +1037,7 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             # number terms that appear in this source NOT the sum of all counts
             src_id_sort = sorted
             src_id_key = lambda x: ascSources * len([v for v in heatmap_data.values() if x[0] in v])
-        elif sortSources == 'identifier':
+        elif sortSources == 'identifier' and idSortSources:
             # sort based on the (normalized) number of results for a given term identifier
             src_id_sort = sorted
             src_id_key = lambda x: ascSources * heatmap_data[idSortSources].get(x[0], 0) / heatmap_data[TOTAL_TERM_ID][x[0]]
