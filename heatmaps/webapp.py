@@ -178,11 +178,16 @@ def data_from_id(hm_id, filetype):
 
     sortTerms = 'literature'
     sortTerms = 'frequency'
+    sortTerms = 'norm_from_term'
+    sortTerms = 'num_common_sources_term'
+    sortTerms = 'jaccard_terms'
     sortSources = 'identifier'
     sortSources = 'frequency'
     idSortTerms = None  # note: should be a SOURCE identifier
-    idSortSources = 'Sleep'
+    idSortTerms = 'Sleep'
     idSortSources = None  # note: should be a TERM identifier
+    idSortSources = 'Sleep'
+    #idSortSources = 'Self-Knowledge'
     ascTerms = False
     ascSources = True
     data, filename, mimetype = hmserv.output(hm_id, filetype, sortTerms, sortSources, collTerms, collSources, idSortTerms, idSortSources, ascTerms, ascSources)

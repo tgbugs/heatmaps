@@ -975,6 +975,51 @@ class heatmap_service(database_service):  # FIXME YEP ITS BLOCKING DEERRRPPPP
             # sort by total number of sources w/ 1 or more hits
             term_id_sort = sorted
             term_id_key = lambda x: ascTerms * len([v for v in heatmap_data[x[0]].values() if v > 0])
+        elif 'jaccard_term':
+            term_id_sort = sorted
+            def term_id_key(x):
+                ref = heatmap_data[idSortTerms]
+                targ = heatmap_data[x[0]]
+
+                ref = set(ref)
+                targ = set(targ)
+
+                return len(ref.intersection(targ))/len(ref.union(targ))
+
+            
+        elif 'num_common_sources_term':
+            # count how many sources overlap (no distance)
+            term_id_sort = sorted
+            def term_id_key(x):
+                ref = heatmap_data[idSortTerms]
+                targ = heatmap_data[x[0]]
+                rank = 0
+                for key in ref:
+                    if key in targ:
+                        rank += 1
+
+                return rank
+
+        elif sortTerms == 'norm_from_term':
+            # distace between terms in number-of-sources dimensional space :/
+            term_id_sort = sorted
+            def term_id_key(x):
+                ref = heatmap_data[idSortTerms]
+                targ = heatmap_data[x[0]]
+                diffs = {}
+                for key, r in ref.items():
+                    if key in targ:
+                        diffs[key] = (r - targ[key]) ** 2
+                    else:
+                        diffs[key] = r ** 2  # target value is zero
+
+                for key, t in targ.items():
+                    if key not in diffs:
+                        diffs[key] = t ** 2  # reference value is zero
+
+                return sum(diffs.values()) ** .5
+
+
         else:  # FIXME we shouldn't need this
             term_id_sort = sorted
             term_id_key = lambda x: x[0]
