@@ -838,12 +838,12 @@ class heatmap_service(database_service):
 
         return hm_data, hp_id, timestamp
 
-    def output_csv(self, matrix, term_name_order, src_name_order, term_id_order,
+    def output_csv(self, heatmap_data, term_name_order, src_name_order, term_id_order,
                    src_id_order, *args, sep=",", export_ids=True, **kwargs):
         """ consturct a csv file on the fly for download response """
         #this needs access id->name mappings
         #pretty sure I already have this written?
-        #matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
+        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
         src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
         term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
@@ -874,7 +874,12 @@ class heatmap_service(database_service):
         """ return a json object with the raw data and the src_id and term_id mappings """
         return simplejson.dumps(heatmap_data), self.mimetypes['json']
 
-    def output_png(self, matrix, term_name_order, src_name_order, *args, title='heatmap', **kwargs):
+    def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
+        term_name_order = list(term_name_order)
+        term_id_order = list(term_id_order)
+        # remove the total term name from the name order list
+        assert term_name_order.pop(term_id_order.index(TOTAL_TERM_ID)) == TOTAL_TERM_ID_NAME, "WHOOPS"
+        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
         limit = 900
         if len(matrix) > 900:
             return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
@@ -1059,7 +1064,7 @@ class heatmap_service(database_service):
         else:
             matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
 
-        representation, mimetype = output_function(matrix, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
+        representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
 
