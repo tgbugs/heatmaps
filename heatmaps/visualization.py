@@ -132,12 +132,15 @@ def compute_diversity(matrix):
     sources_per_term = np.sum(matrix > 0, axis=1) / total_data_sources
     return sources_per_term
 
-def make_png(matrix, row_names, col_names, title):
+def make_png(matrix, row_names, col_names, title, poster=False):
     aspect = .3
     ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
     print('ratio', ratio)
     base = 22  #width
-    dpi = 600
+    if poster:
+        dpi = 600
+    else:
+        dpi = 300
     width_ratios = 98, 2
     size = (base, base / ratio * aspect)  #FIXME >_<
     print(size)
