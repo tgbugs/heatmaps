@@ -880,8 +880,8 @@ class heatmap_service(database_service):
         # remove the total term name from the name order list
         assert term_name_order.pop(term_id_order.index(TOTAL_TERM_ID)) == TOTAL_TERM_ID_NAME, "WHOOPS"
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
-        limit = 900
-        if len(matrix) > 900:
+        limit = 1500
+        if len(matrix) > limit:
             return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
 
         if title.endswith('.png'):
