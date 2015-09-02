@@ -1058,11 +1058,6 @@ class heatmap_service(database_service):
 
         src_id_order, src_name_order = [c for c in zip(*src_id_sort([(id_, name)
                                           for id_, name in src_id_name_dict.items()], key=src_id_key))]
-        # deal with dict vs matrix representation of the data
-        if filetype in ('json', None):
-            matrix = heatmap_data
-        else:
-            matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
 
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
