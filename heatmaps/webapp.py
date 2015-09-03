@@ -177,14 +177,14 @@ def data_from_id(hm_id, filetype):
         collSources = None
 
     sortTerms = 'literature'
-    sortTerms = 'frequency'
     sortTerms = 'norm_from_term'
     sortTerms = 'num_common_sources_term'
     sortTerms = 'jaccard_terms'
+    sortTerms = 'frequency'
     sortSources = 'identifier'
     sortSources = 'frequency'
     idSortTerms = None  # note: should be a SOURCE identifier
-    idSortTerms = 'Sleep'
+    #idSortTerms = 'Sleep'
     idSortSources = None  # note: should be a TERM identifier
     idSortSources = 'Sleep'
     #idSortSources = 'Self-Knowledge'
@@ -265,7 +265,7 @@ def hm_terms():
     If both are provided the comma separated list will be preferred. <br>
     Building heatmaps can take a long time. Once you hit submit you may have to wait <br>
     as long as 30 minutes (if you have thousands of terms) for your heatmap to finish. <br>
-    If you submit less than %s terms the heatmap will not be saved.
+    If you submit %s or less terms the heatmap will not be saved.
     """ % hmserv.TERM_MIN
     return page
 
@@ -332,6 +332,8 @@ def docs():
     To explore an existing heatmap append the heatmapid to the following url: <br>
     <a href={explore_url}>{explore_url}</a><br>
     Example: <a href={explore_url}0.png>{explore_url}0</a>
+    <h2>Legend</h2>
+    Bins for numbers are 0, 1-10, 11-100, >100
     """.format(prov_url=base_url + ext_path + '/prov/',
                explore_url=base_url + ext_path + '/explore/')
     return page
