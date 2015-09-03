@@ -537,7 +537,7 @@ class sortstuff:
         return inverted
 
     def sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim, id_name_dict):
-        id_sort, id_key = get_sort(sort_name, heatmap_data, idSortKey, ascending, sortDim)
+        id_sort, id_key = self.get_sort(sort_name, heatmap_data, idSortKey, ascending, sortDim)
         id_order, name_order = [c for c in zip(*id_sort([(id_, name)
                                             for id_, name in id_name_dict.items()], key=id_key))]
         return id_order, name_order
@@ -724,6 +724,10 @@ class heatmap_service(database_service):
             'csv':self.output_csv,
             'png':self.output_png,
                      }
+
+        ss = sortstuff()
+        self.sorts = ss.sorts
+        self.sort = ss.sort
 
     def check_counts(self):
         """ validate that we have the latest, if we do great
@@ -1090,6 +1094,12 @@ class heatmap_service(database_service):
         # sort options are drawn from this class and do not accept arbitrary input
         # TODO this needs to go in its own method
 
+        term_id_order, term_name_order = self.sort(self,
+            sortTerms, heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
+        src_id_order, src_name_order = self.sort(self,
+            sortSources, heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
+
+        """
         ascTerms = 1 if ascTerms else -1
         ascSources = 1 if ascSources else -1
         if sortTerms == 'original':
@@ -1193,6 +1203,7 @@ class heatmap_service(database_service):
 
         src_id_order, src_name_order = [c for c in zip(*src_id_sort([(id_, name)
                                           for id_, name in src_id_name_dict.items()], key=src_id_key))]
+        #"""
 
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
