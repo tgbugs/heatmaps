@@ -501,6 +501,141 @@ class ontology_service(rest_service):
         # are now dirty >_< (and synonyms suck)
 
 ###
+#   Sorting!
+###
+
+class sortstuff:
+    def __init__(self):
+        # build a list of valid sort types from methods to populate the menus automatically
+        self.sorts = [n for n in dir(self) if not n.startswith('_') and n != 'get_sort' and n != 'sort']
+        # first pass alpha to avoid unstable sort issues
+        self.sorted = lambda collection, key: sorted(sorted(collection), key=key)
+
+    def _asc(self, asc):
+        return 1 if asc else -1
+
+    def _dim1Ref(self, heatmap_data, idSortKey):
+        return {key:dict_[idSortKey] if idSortKey in dict_ else 0 for key, dict_ in heatmap_data.items()}
+
+        ref = {}
+        for key, dict_ in heatmap_data.items():
+            if idSortKey in dict_:
+                ref[key] = dict_[idSortKey]
+            else:
+                ref[key] = 0
+        return ref
+
+    def _invert_map(self, heatmap_data):
+        inverted = {}
+        for outer_key, dict_ in heatmap_data:
+            for inner_key, number, in dict_:
+                if inner_key not in inverted:
+                    inverted[inner_key] = {}
+
+                inverted[inner_key][out_key] = number
+
+        return inverted
+
+    def sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim, id_name_dict):
+        id_sort, id_key = get_sort(sort_name, heatmap_data, idSortKey, ascending, sortDim)
+        id_order, name_order = [c for c in zip(*id_sort([(id_, name)
+                                            for id_, name in id_name_dict.items()], key=id_key))]
+        return id_order, name_order
+
+    def get_sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim):
+        return getattr(self, sort_name, 'default')(heatmap_data, idSortKey, ascending, sortDim)
+
+    def default(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        return self.alpha_id(heatmap_data, idSortKey, sortDim)
+
+    def alpha_id(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        if not ascending:
+            sorted_ = lambda c, k: sorted(c, k)[::-1]
+        else:
+            sorted_ = sorted
+
+        key = lambda x: x[0]
+        return sorted_, key
+
+    def alpha_name(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        if not ascending:
+            sorted_ = lambda c, k: sorted(c, k)[::-1]
+        else:
+            sorted_ = sorted
+
+        key = lambda x: x[1]
+        return sorted_, key
+
+    def identifier(self, heatmap_data, idSortKey, ascending=True, sortDim=0):  # TODO
+        # identifier from opposite axis
+        ascending = self._asc(ascending)
+        if sortDim:  # normalize by total records for a given source
+            key = lambda x: ascending * heatmap_data[idSortKey].get(x[0], 0) / heatmap_data[TOTAL_TERM_ID][x[0]]
+        else:  # normalize by total hits for a given term
+            key = lambda x: ascending * heatmap_data[x[0]].get(idSortKey, 0) / sum(heatmap_data[x[0]].values())
+
+        return self.sorted, key
+
+    def frequency(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        ascending = self._asc(ascending)
+        if sortDim:
+            key = lambda x: ascending * len([v for v in heatmap_data.values() if x[0] in v])
+        else:
+            key = lambda x: ascending * len([v for v in heatmap_data[x[0]].values() if v > 0])
+        return self.sorted, key
+
+    def jaccard(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        if sortDim:
+            heatmap_data = self._invert_map(heatmap_data)
+
+        def key(x):
+            ref = heatmap_data[idSortKey]
+            targ = heatmap_data[x[0]]
+            ref = set(ref)
+            targ = set(targ)
+            return len(ref.intersection(targ))/len(ref.union(targ))
+
+        return self.sorted, key
+
+    def num_common_same_axis(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        if sortDim:
+            heatmap_data = self._invert_map(heatmap_data)
+
+        def key(x):
+            ref = heatmap_data[idSortKey]
+            targ = heatmap_data[x[0]]
+            rank = 0
+            for key in ref:
+                if key in targ:
+                    rank += 1
+            return rank
+
+        return self.sorted, key
+
+    def norm_from_same_axis(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        if sortDim:
+            heatmap_data = self._invert_map(heatmap_data)
+        
+        def key(x):
+            ref = heatmap_data[idSortKey]
+            targ = heatmap_data[x[0]]
+            diffs = {}
+            for key, r in ref.items():
+                if key in targ:
+                    diffs[key] = (r - targ[key]) ** 2
+                else:
+                    diffs[key] = r ** 2  # target value is zero
+
+            for key, t in targ.items():
+                if key not in diffs:
+                    diffs[key] = t ** 2  # reference value is zero
+
+
+            return sum(diffs.values()) ** .5
+
+        return self.sorted, key
+
+###
 #   Stick the collected data in a datastore (postgres)
 ###
 
@@ -1092,6 +1227,8 @@ def str_cast(dict):
 
 
 def main():
+    embed()
+    return
     ts = term_service()
     ss = summary_service()
     os = ontology_service()
