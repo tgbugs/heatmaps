@@ -514,17 +514,6 @@ class sortstuff:
     def _asc(self, asc):
         return 1 if asc else -1
 
-    def _dim1Ref(self, heatmap_data, idSortKey):
-        return {key:dict_[idSortKey] if idSortKey in dict_ else 0 for key, dict_ in heatmap_data.items()}
-
-        ref = {}
-        for key, dict_ in heatmap_data.items():
-            if idSortKey in dict_:
-                ref[key] = dict_[idSortKey]
-            else:
-                ref[key] = 0
-        return ref
-
     def _invert_map(self, heatmap_data):
         inverted = {}
         for outer_key, dict_ in heatmap_data:
@@ -706,8 +695,6 @@ class heatmap_service(database_service):
                  'csv':'text/csv',
                  'json':'application/json',
                  'png':'image/png'}
-    #supported_termSort = 'alpha_id', 'alpha_name', 'original', 'uploaded', 'identifier', 'frequency', 'literature'
-    #supported_sourceSort = 'alpha_id', 'alpha_name', 'uploaded', 'identifier', 'frequency'
 
     def __init__(self, summary_server, term_server):
         super().__init__()
@@ -1050,10 +1037,6 @@ class heatmap_service(database_service):
         timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
         filename = 'nif_heatmap_%s_%s.%s' % (heatmap_id, timestamp, filetype)
 
-        #if filetype == 'json':  # FIXME FIXME FIXME ARGH well... it is the only unsorted type
-            #representation, mimetype = output_function(heatmap_data)
-            #return representation, filename, mimetype
-
         # collapse rules and execution (need to go in their own function)
         # terms
         if collTerms == 'cheese':
@@ -1091,124 +1074,15 @@ class heatmap_service(database_service):
         if src_id_coll_dict:
             heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
 
-        # sort options are drawn from this class and do not accept arbitrary input
-        # TODO this needs to go in its own method
-
+        # sort!
         term_id_order, term_name_order = self.sort(sortTerms,
-            heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
+                    heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
         src_id_order, src_name_order = self.sort(sortSources,
-            heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
-
-        """
-        ascTerms = 1 if ascTerms else -1
-        ascSources = 1 if ascSources else -1
-        if sortTerms == 'original':
-            term_id_sort = sorted
-            if heatmap_id in self.heatmap_term_order:  # FIXME mutex with term collapse
-                orig_order = self.heatmap_term_order[heatmap_id]
-                term_id_key = lambda x: orig_order.index(x[0])
-            else:
-                print('Original failed using alpha for terms for heatmap', heatmap_id)
-                term_id_key = lambda x: x[1]  # FIXME nasty nasty hidden hack
-                #return None, 'Original order no longer on the server :(', None
-        elif sortTerms == 'alpha_id':
-            term_id_sort = sorted
-            term_id_key = lambda x: x[0]
-        elif sortTerms == 'alpha_name':
-            term_id_sort = sorted
-            term_id_key = lambda x: x[1]
-        elif sortTerms == 'literature':
-            # sort by number of literature results
-            term_id_sort = sorted
-            term_id_key = lambda x: ascTerms * heatmap_data[x[0]].get(LITERATURE_ID, 0)
-        elif sortTerms == 'identifier' and idSortTerms:  # FIXME idSortTerms is being used in 2 different waysdepending on whether it is a term or a source :/
-            # sort by number of results w/in a given datasources
-            term_id_sort = sorted
-            term_id_key = lambda x: ascTerms * heatmap_data[x[0]].get(idSortTerms, 0)
-        elif sortTerms == 'frequency':
-            # sort by total number of sources w/ 1 or more hits
-            term_id_sort = sorted
-            term_id_key = lambda x: ascTerms * len([v for v in heatmap_data[x[0]].values() if v > 0])
-        elif 'jaccard_term' and idSortTerms:
-            term_id_sort = sorted
-            def term_id_key(x):
-                ref = heatmap_data[idSortTerms]
-                targ = heatmap_data[x[0]]
-
-                ref = set(ref)
-                targ = set(targ)
-
-                return len(ref.intersection(targ))/len(ref.union(targ))
-
-        elif 'num_common_sources_term' and idSortTerms:
-            # count how many sources overlap (no distance)
-            term_id_sort = sorted
-            def term_id_key(x):
-                ref = heatmap_data[idSortTerms]
-                targ = heatmap_data[x[0]]
-                rank = 0
-                for key in ref:
-                    if key in targ:
-                        rank += 1
-
-                return rank
-
-        elif sortTerms == 'norm_from_term' and idSortTerms:
-            # distace between terms in number-of-sources dimensional space :/
-            term_id_sort = sorted
-            def term_id_key(x):
-                ref = heatmap_data[idSortTerms]
-                targ = heatmap_data[x[0]]
-                diffs = {}
-                for key, r in ref.items():
-                    if key in targ:
-                        diffs[key] = (r - targ[key]) ** 2
-                    else:
-                        diffs[key] = r ** 2  # target value is zero
-
-                for key, t in targ.items():
-                    if key not in diffs:
-                        diffs[key] = t ** 2  # reference value is zero
-
-                return sum(diffs.values()) ** .5
-
-        else:  # FIXME we shouldn't need this
-            term_id_sort = sorted
-            term_id_key = lambda x: x[0]
-
-        # sources
-        if sortSources == 'alpha_id':
-            src_id_sort = sorted
-            src_id_key = lambda x: x[0]
-        elif sortSources == 'alpha_name':
-            src_id_sort = sorted
-            src_id_key = lambda x: x[1]
-        elif sortSources == 'frequency':
-            # number terms that appear in this source NOT the sum of all counts
-            src_id_sort = sorted
-            src_id_key = lambda x: ascSources * len([v for v in heatmap_data.values() if x[0] in v])
-        elif sortSources == 'identifier' and idSortSources:
-            # sort based on the (normalized) number of results for a given term identifier
-            src_id_sort = sorted
-            src_id_key = lambda x: ascSources * heatmap_data[idSortSources].get(x[0], 0) / heatmap_data[TOTAL_TERM_ID][x[0]]
-        else:
-            src_id_sort = sorted
-            src_id_key = lambda x: x[0]
-
-        print('sortTerms', sortTerms, 'sortSources', sortSources)
-
-        # derive the id and name orders from the sort function
-        term_id_order, term_name_order = [c for c in zip(*term_id_sort([(id_, name)
-                                            for id_, name in term_id_name_dict.items()], key=term_id_key))]
-
-        src_id_order, src_name_order = [c for c in zip(*src_id_sort([(id_, name)
-                                          for id_, name in src_id_name_dict.items()], key=src_id_key))]
-        #"""
+                    heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
 
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
-
 
     def __repr__(self):
         a = str(self.resources).replace('),','),\n')+'\n'
