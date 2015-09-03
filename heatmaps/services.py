@@ -460,6 +460,8 @@ class term_service():  # FURL PLS
     def get_name(self, tid):
         # try to convert fragments into CURIE form
         tid = tid.replace('_',':')  # FIXME this will only work SOMETIMES
+        if ' ' in tid or ':' not in tid:  # no space in ids & SG>1.5 requries cuires
+            return None
         json = vocab.findById(tid)  # FIXME cache this stuff?
         return json['labels'][0] if json else None
 
