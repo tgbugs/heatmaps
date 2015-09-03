@@ -1,5 +1,10 @@
 Python for acquiring data to make heatmaps and actually making them.
 
+## matplotlibrc
+You must set
+backend : Agg
+in ~/.config/matplotlib/matplotlibrc
+
 ## Setup steps
 
 0. install all the following libs (centos version): ```yum install postgresql-libs postgresql-devel libxml2 libxml libxslt libxml-dev libxml2-dev libxml2-devel libxslt-dev libxslt-devel httpd-devel```
