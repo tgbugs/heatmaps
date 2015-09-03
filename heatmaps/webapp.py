@@ -219,7 +219,8 @@ def hm_explore(hm_id):
         date, time = timestamp.split('T')
     heatmap_data = hmserv.get_heatmap_data_from_id(hm_id)
 
-    sorting_ops = '<br>'.join(hmserv.supported_termSort)
+    sorting_ops = '<br>'.join(hmserv.sorts)
+    src_ids = None
     term_ids = '<br>'.join(sorted(heatmap_data))
     tuples = [[v if v is not None else '' for v in hmserv.term_server.term_id_expansion(term)]
               for term in heatmap_data]

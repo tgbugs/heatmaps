@@ -543,9 +543,9 @@ class sortstuff:
         return id_order, name_order
 
     def get_sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim):
-        return getattr(self, sort_name, 'default')(heatmap_data, idSortKey, ascending, sortDim)
+        return getattr(self, sort_name, '_default')(heatmap_data, idSortKey, ascending, sortDim)
 
-    def default(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+    def _default(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
         return self.alpha_id(heatmap_data, idSortKey, sortDim)
 
     def alpha_id(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
@@ -706,8 +706,8 @@ class heatmap_service(database_service):
                  'csv':'text/csv',
                  'json':'application/json',
                  'png':'image/png'}
-    supported_termSort = 'alpha_id', 'alpha_name', 'original', 'uploaded', 'identifier', 'frequency', 'literature'
-    supported_sourceSort = 'alpha_id', 'alpha_name', 'uploaded', 'identifier', 'frequency'
+    #supported_termSort = 'alpha_id', 'alpha_name', 'original', 'uploaded', 'identifier', 'frequency', 'literature'
+    #supported_sourceSort = 'alpha_id', 'alpha_name', 'uploaded', 'identifier', 'frequency'
 
     def __init__(self, summary_server, term_server):
         super().__init__()
@@ -1094,10 +1094,10 @@ class heatmap_service(database_service):
         # sort options are drawn from this class and do not accept arbitrary input
         # TODO this needs to go in its own method
 
-        term_id_order, term_name_order = self.sort(self,
-            sortTerms, heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
-        src_id_order, src_name_order = self.sort(self,
-            sortSources, heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
+        term_id_order, term_name_order = self.sort(sortTerms,
+            heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
+        src_id_order, src_name_order = self.sort(sortSources,
+            heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
 
         """
         ascTerms = 1 if ascTerms else -1
