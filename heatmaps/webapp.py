@@ -211,7 +211,11 @@ terms_form = Form("NIF heatmaps from terms",
 
 @hmapp.route(ext_path + "/explore/<hm_id>", methods = ['GET'])
 def hm_explore(hm_id):
-    hm_id = int(hm_id)
+    try:
+        hm_id = int(hm_id)
+    except ValueError:
+        return abort(404)
+
     timestamp = hmserv.get_timestamp_from_id(hm_id)
     if not timestamp:
         return abort(404)
