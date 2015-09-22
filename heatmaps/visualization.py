@@ -1,5 +1,7 @@
 from collections import defaultdict
 import numpy as np
+from matplotlib import use as mpluse
+mpluse('Agg')
 import pylab as plt
 
 from IPython import embed
