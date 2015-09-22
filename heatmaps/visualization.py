@@ -134,7 +134,7 @@ def compute_diversity(matrix):
     sources_per_term = np.sum(matrix > 0, axis=1) / total_data_sources
     return sources_per_term
 
-def make_png(matrix, row_names, col_names, title, poster=False):
+def make_png(matrix, row_names, col_names, title, destdir, poster=False, async=False):
     aspect = .3
     ratio = float(matrix.shape[1] + 1) / float(matrix.shape[0] + 1)  # cols / rows
     print('ratio', ratio)
@@ -187,10 +187,11 @@ def make_png(matrix, row_names, col_names, title, poster=False):
 
     fig.suptitle(title, x=.5, y=0, fontsize=base*.25, verticalalignment='bottom')  # FIXME stupidly broken >_<
 
-    fig.savefig('/tmp/%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
-    with open('/tmp/%s.png'%title, 'rb') as f:
-        png = f.read()
-    return png
+    fig.savefig(destdir + '%s.png'%title, bbox_inches='tight', pad_inches=.1, dpi=dpi)
+    if not async:
+        with open(destdir + '%s.png'%title, 'rb') as f:
+            png = f.read()
+        return png
 
 def applyNames():
     """ Last step, make sure the identifier used has a name mapping! """

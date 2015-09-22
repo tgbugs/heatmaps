@@ -12,6 +12,7 @@
 import simplejson
 from functools import wraps
 from os import environ, path
+from concurrent.futures import ProcessPoolExecutor
 
 import requests
 import psycopg2 as pg
@@ -159,6 +160,7 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
 class summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
     old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
     url = "http://beta.neuinfo.org/services/v1/summary.xml?q=%s"
+    url, old_url = old_url, url
     _timeout = 20
 
     missing_ids = 'nif-0000-21197-1', 'nif-0000-00053-2'
@@ -714,6 +716,8 @@ class heatmap_service(database_service):
             'png':self.output_png,
                      }
 
+        self.ppe = ProcessPoolExecutor()
+
         ss = sortstuff()
         self.sorts = ss.sorts
         self.sort = ss.sort
@@ -1017,7 +1021,12 @@ class heatmap_service(database_service):
 
         row_names = term_name_order
         col_names = src_name_order
-        png = make_png(matrix, row_names, col_names, title)
+        destdir = '/tmp/'
+        future = self.ppe.submit(make_png, matrix, row_names, col_names, title, destdir, async=True)
+        future.result()
+        with open(destdir + '%s.png'%title, 'rb') as f:
+            png = f.read()
+        #png = make_png(matrix, row_names, col_names, title)
         return png, self.mimetypes['png']
 
     def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,
