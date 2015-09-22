@@ -324,7 +324,7 @@ def overview():
 @hmapp.route(ext_path + '/docs', methods = ['GET'])
 @hmapp.route(ext_path + '/docs/', methods = ['GET'])
 def docs():
-    base_url = 'http://' + request.host + ext_path
+    base_url = 'http://' + request.host
     page = """
     <!doctype html>
     <title>NIF Heatmaps Documentation</title>
@@ -336,7 +336,7 @@ def docs():
     <br>
     To explore an existing heatmap append the heatmapid to the following url: <br>
     <a href={explore_url}>{explore_url}</a><br>
-    Example: <a href={explore_url}0.png>{explore_url}0</a>
+    Example: <a href={explore_url}0>{explore_url}0</a>
     <h2>Legend</h2>
     Bins for numbers are 0, 1-10, 11-100, >100
     """.format(prov_url=base_url + ext_path + '/prov/',
