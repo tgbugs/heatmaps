@@ -94,6 +94,25 @@ class Form(Templated):  # FIXME separate callbacks? nah?
                 field.callback()
                 return "WUT"
 
+class Select(Templated):
+    TEMPLATE = """
+    <label>{{select_name}}</label>
+    <select name="{{select_name}}" number=30>
+    {% for opt, opt_val in options %}
+        <option value="{{opt}}">{{opt_val}}</option>
+    {% endfor %}
+    </select>
+    """
+
+    def __init__(self, name, options, opt_val=None):
+        self.name = name
+        if opt_val:
+            options = [(a, b) for a, b in zip(options, opt_val)]
+        else:
+            options = [(a, b) for a, b in zip(options, options)]
+        render_kwargs = dict(select_name=name, options=options)
+        super().__init__(render_kwargs)
+
 
 hmserv = heatmap_service(summary_service(), term_service())  # mmm nasty singletons
 
@@ -168,14 +187,18 @@ def do_terms(terms):
     return output
 
 
-def data_from_id(hm_id, filetype):
+def data_from_id(hm_id, filetype, collTerms=None, collSources=None,
+                 sortTerms=None, sortSources=None,
+                 idSortTerms=None, idSortSources=None,
+                 ascTerms=True, ascSources=True):
     hm_id = int(hm_id)
-    collTerms = None
-    if filetype == 'png':
-        collSources = 'collapse views to sources'
-    else:
-        collSources = None
+    #collTerms = None
+    #if filetype == 'png':
+        #collSources = 'collapse views to sources'
+    #else:
+        #collSources = None
 
+    """
     sortTerms = 'literature'
     sortTerms = 'norm_from_term'
     sortTerms = 'num_common_sources_term'
@@ -190,6 +213,9 @@ def data_from_id(hm_id, filetype):
     #idSortSources = 'Self-Knowledge'
     ascTerms = False
     ascSources = True
+    #"""
+    print('RUNNING:')
+    print(hm_id, filetype, sortTerms, sortSources, collTerms, collSources, idSortTerms, idSortSources, ascTerms, ascSources)
     data, filename, mimetype = hmserv.output(hm_id, filetype, sortTerms, sortSources, collTerms, collSources, idSortTerms, idSortSources, ascTerms, ascSources)
     if data:
         if filetype == 'csv':
@@ -204,10 +230,46 @@ def data_from_id(hm_id, filetype):
         return abort(404)
 
 
+###
+#   Form creation
+###
+
 terms_form = Form("NIF heatmaps from terms",
                     ("Term list (comma separated)", "Term file (newline separated)"),  #TODO select!
                     ('text','file'),
                     (TERMLIST, TERMFILE))
+
+###
+#   Routes and implementations
+###
+
+@hmapp.route(ext_path + "/explore/submit/<hm_id>", methods = ['POST'])
+def hm_viz(hm_id):
+    args = (hm_id,
+            request.form['filetype'],
+            request.form['collTerms'],
+            request.form['collSources'],
+            request.form['sortTerms'],
+            request.form['sortSources'],
+            request.form['idSortTerms'],
+            request.form['idSortSources'],
+            request.form['ascTerms'],
+            request.form['ascSources'])
+
+    #input cleanup (ick)
+    new_args = []
+    for arg in args:
+        if arg == 'None':
+            new_args.append(None)
+        elif arg == 'True':
+            new_args.append(True)
+        elif arg == 'False':
+            new_args.append(False)
+        else:
+            new_args.append(arg)
+
+    data = data_from_id(*new_args)
+    return data
 
 @hmapp.route(ext_path + "/explore/<hm_id>", methods = ['GET'])
 def hm_explore(hm_id):
@@ -223,9 +285,23 @@ def hm_explore(hm_id):
         date, time = timestamp.split('T')
     heatmap_data = hmserv.get_heatmap_data_from_id(hm_id)
 
-    sorting_ops = '<br>'.join(hmserv.sorts)
-    src_ids = None
-    term_ids = '<br>'.join(sorted(heatmap_data))
+
+    ct_ops = Select('collTerms', hmserv.collTerms).render()
+    cs_ops = Select('collSources', hmserv.collSources).render()
+
+    st_ops = Select('sortTerms', hmserv.sorts).render()
+    ss_ops = Select('sortSources', hmserv.sorts).render()  # FIXME need a way to convert a selected source across a collapse
+
+    term_id_ops = Select('idSortTerms', sorted(heatmap_data)).render()
+    srcs = sorted([(k, ' '.join(v)) for k, v in hmserv.resources.items()], key=lambda a: a[1].lower())
+    src_ids, src_names = [a for a in zip(*srcs)]
+    src_id_ops = Select('idSortSources', src_ids, src_names).render()  # FIXME need a way to show name but return id
+
+    ta_ops = Select('ascTerms', ('True', 'False')).render()
+    sa_ops = Select('ascSources', ('True', 'False')).render()
+
+    ft_ops = Select('filetype', sorted([str(m) for m in hmserv.mimetypes])).render()
+
     tuples = [[v if v is not None else '' for v in hmserv.term_server.term_id_expansion(term)]
               for term in heatmap_data]
     num_matches = len([t for t in tuples if t[1]])
@@ -245,16 +321,36 @@ def hm_explore(hm_id):
 <title>NIF Heatmap {hm_id} exploration</title>
 <h1>Explore heatmap {hm_id}</h1>
 <h2>Created on: {date} at {time}</h2>
-<h3>Sorting Options:</h3>
-{sorting_ops}
 <h3>Number of terms: {num_terms}</h3>
 <h3>Terms found in ontology: {num_matches}</h3>
-<h3>Terms:</h3>
-{term_ids}<br>
+<br><br>
+<h2>Download configuration:</h2>
+<form action=submit/{hm_id} method=POST enctype=multipart/form-data>
+    <h3>Collapse options:</h3>
+    {ct_ops}
+    {cs_ops} <br>
+    <h3>Sorting Options:</h3>
+    {st_ops}
+    {ss_ops} <br>
+    <h3>Terms:</h3>
+    {term_id_ops}
+    {src_id_ops} <br>
+    <h3>Ascending:</h3>
+    {ta_ops}
+    {sa_ops} <br>
+    <h3>Filetype:</h3>
+    {ft_ops} <br><br>
+    <input type=submit value=Generate>
+</form>
+<br><br>
 <h3>Expansion: putative term, curie, label, query</h3>
-{expansion}""".format(hm_id=hm_id, date=date, time=time, term_ids=term_ids,
-                      sorting_ops=sorting_ops, expansion=expansion,
-                      num_terms=len(heatmap_data), num_matches=num_matches)
+{expansion}""".format(hm_id=hm_id, date=date, time=time,
+                      st_ops=st_ops, ss_ops=ss_ops, ct_ops=ct_ops, cs_ops=cs_ops,
+                      term_id_ops=term_id_ops, src_id_ops=src_id_ops,
+                      ta_ops=ta_ops, sa_ops=sa_ops,
+                      ft_ops=ft_ops,
+                      expansion=expansion, num_terms=len(heatmap_data),
+                      num_matches=num_matches)
 
     return page
 

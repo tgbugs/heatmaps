@@ -530,20 +530,22 @@ class sortstuff:
         return inverted
 
     def sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim, id_name_dict):
+        print(sort_name, idSortKey, ascending, sortDim)
         id_sort, id_key = self.get_sort(sort_name, heatmap_data, idSortKey, ascending, sortDim)
+        print(id_sort)
         id_order, name_order = [c for c in zip(*id_sort([(id_, name)
                                             for id_, name in id_name_dict.items()], key=id_key))]
         return id_order, name_order
 
     def get_sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim):
-        return getattr(self, sort_name, '_default')(heatmap_data, idSortKey, ascending, sortDim)
+        return getattr(self, str(sort_name), self._default)(heatmap_data, idSortKey, ascending, sortDim)
 
     def _default(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
         return self.alpha_id(heatmap_data, idSortKey, sortDim)
 
     def alpha_id(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
         if not ascending:
-            sorted_ = lambda c, k: sorted(c, k)[::-1]
+            sorted_ = lambda c, key: sorted(c, key=key)[::-1]
         else:
             sorted_ = sorted
 
@@ -565,7 +567,7 @@ class sortstuff:
         if sortDim:  # normalize by total records for a given source
             key = lambda x: ascending * heatmap_data[idSortKey].get(x[0], 0) / heatmap_data[TOTAL_TERM_ID][x[0]]
         else:  # normalize by total hits for a given term
-            key = lambda x: ascending * heatmap_data[x[0]].get(idSortKey, 0) / sum(heatmap_data[x[0]].values())
+            key = lambda x: ascending * heatmap_data[x[0]].get(idSortKey, 0) / sum(heatmap_data[x[0]].values())  # FIXME division by zero is possible here!
 
         return self.sorted, key
 
@@ -694,11 +696,14 @@ class heatmap_service(database_service):
     user = "heatmapuser"
     port = 5432
     TERM_MIN = 5
-    supported_filetypes = None, 'csv', 'json', 'png'
+    #supported_filetypes = None, 'csv', 'json', 'png'
     mimetypes = {None:'text/plain',
                  'csv':'text/csv',
                  'json':'application/json',
                  'png':'image/png'}
+
+    collTerms = None,
+    collSources = None, 'collapse views to sources',
 
     def __init__(self, summary_server, term_server):
         super().__init__()
@@ -1036,7 +1041,7 @@ class heatmap_service(database_service):
             Provide a single API for all output types.
         """
         if filetype not in self.output_map:
-            return None, "Unsupportred filetype!"
+            return None, "Unsupportred filetype!", None
         else:
             output_function = self.output_map[filetype]
 
@@ -1075,8 +1080,16 @@ class heatmap_service(database_service):
 
         if src_coll_function:
             src_id_coll_dict, src_id_name_dict = src_coll_function(heatmap_data[TOTAL_TERM_ID], src_id_name_dict)
+            if idSortSources not in src_id_coll_dict:  # FIXME idSortSources is being used differently now :/
+                idSortSources = idSortSources.rsplit('-',1)[0]
+                if idSortSources not in src_id_coll_dict:
+                    embed()
+                    raise NameError('Identifier %s unknown!' % idSortSources)
         else:
             src_id_coll_dict = None
+
+        #FIXME PROBLEMS KIDS
+        idSortTerms, idSortSources = idSortSources, idSortTerms
 
         # apply the collapse dicts to the data, need to do before sorting for some sort options
         if term_id_coll_dict:
