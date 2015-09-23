@@ -292,10 +292,12 @@ def hm_explore(hm_id):
     st_ops = Select('sortTerms', hmserv.sorts).render()
     ss_ops = Select('sortSources', hmserv.sorts).render()  # FIXME need a way to convert a selected source across a collapse
 
-    term_id_ops = Select('idSortTerms', sorted(heatmap_data)).render()
+    #term_id_ops = Select('idSortTerms', sorted(heatmap_data)).render()
+    #src_id_ops = Select('idSortSources', src_ids, src_names).render()  # FIXME need a way to show name but return id
     srcs = sorted([(k, ' '.join(v)) for k, v in hmserv.resources.items()], key=lambda a: a[1].lower())
     src_ids, src_names = [a for a in zip(*srcs)]
-    src_id_ops = Select('idSortSources', src_ids, src_names).render()  # FIXME need a way to show name but return id
+    term_id_ops = Select('idSortTerms', src_ids, src_names).render()  # FIXME need a way to show name but return id
+    src_id_ops = Select('idSortSources', sorted(heatmap_data)).render()
 
     ta_ops = Select('ascTerms', ('True', 'False')).render()
     sa_ops = Select('ascSources', ('True', 'False')).render()
@@ -325,14 +327,14 @@ def hm_explore(hm_id):
 <h3>Terms found in ontology: {num_matches}</h3>
 <br><br>
 <h2>Download configuration:</h2>
-<form action=submit/{hm_id} method=POST enctype=multipart/form-data>
+<form action=submit/{hm_id} method=POST enctype=multipart/form-data target="_blank">
     <h3>Collapse options:</h3>
     {ct_ops}
     {cs_ops} <br>
     <h3>Sorting Options:</h3>
     {st_ops}
     {ss_ops} <br>
-    <h3>Terms:</h3>
+    <h3>Identifier to sort against:</h3>
     {term_id_ops}
     {src_id_ops} <br>
     <h3>Ascending:</h3>
@@ -420,6 +422,7 @@ def overview():
 @hmapp.route(ext_path + '/docs', methods = ['GET'])
 @hmapp.route(ext_path + '/docs/', methods = ['GET'])
 def docs():
+    sort_docs = '<br><br>'.join([' '.join(('<b>' +k + '</b>', v)) for k, v in hmserv.sort_docs.items()])
     base_url = 'http://' + request.host
     page = """
     <!doctype html>
@@ -435,8 +438,11 @@ def docs():
     Example: <a href={explore_url}0>{explore_url}0</a>
     <h2>Legend</h2>
     Bins for numbers are 0, 1-10, 11-100, >100
+    <h2>Sorting options</h2>
+    {sort_docs}
     """.format(prov_url=base_url + ext_path + '/prov/',
-               explore_url=base_url + ext_path + '/explore/')
+               explore_url=base_url + ext_path + '/explore/',
+               sort_docs=sort_docs)
     return page
 
 
