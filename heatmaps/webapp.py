@@ -422,7 +422,7 @@ def overview():
 @hmapp.route(ext_path + '/docs', methods = ['GET'])
 @hmapp.route(ext_path + '/docs/', methods = ['GET'])
 def docs():
-    sort_docs = '<br><br>'.join([' '.join(('<b>' +k + '</b>', v)) for k, v in hmserv.sort_docs.items()])
+    sort_docs = '<br><br>'.join(sorted([' '.join(('<b>' +k + '</b>', v)) for k, v in hmserv.sort_docs.items()]))
     base_url = 'http://' + request.host
     page = """
     <!doctype html>
