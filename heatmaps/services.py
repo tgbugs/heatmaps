@@ -514,6 +514,16 @@ class sortstuff:
         self.sorts = [n for n in dir(self) if not n.startswith('_') and n != 'get_sort' and n != 'sort']
         # first pass alpha to avoid unstable sort issues
         self.sorted = lambda collection, key: sorted(sorted(collection), key=key)
+        self._make_docs()
+
+    def _make_docs(self):
+        self.docs = {}
+        for func in self.sorts:
+            doc = getattr(self, func).__doc__
+            if doc is None:
+                doc = 'DOCUMENT ME PLEASE!'
+            doc = ' '.join(doc.strip().rstrip().split())  # ah, the dirty join(split)
+            self.docs[func] = doc
 
     def _asc(self, asc):
         return 1 if asc else -1
@@ -544,6 +554,7 @@ class sortstuff:
         return self.alpha_id(heatmap_data, idSortKey, sortDim)
 
     def alpha_id(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort alphabetically by identifier."""
         if not ascending:
             sorted_ = lambda c, key: sorted(c, key=key)[::-1]
         else:
@@ -553,8 +564,9 @@ class sortstuff:
         return sorted_, key
 
     def alpha_name(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort alphabetically by name."""
         if not ascending:
-            sorted_ = lambda c, k: sorted(c, k)[::-1]
+            sorted_ = lambda c, key: sorted(c, key=key)[::-1]
         else:
             sorted_ = sorted
 
@@ -562,16 +574,30 @@ class sortstuff:
         return sorted_, key
 
     def identifier(self, heatmap_data, idSortKey, ascending=True, sortDim=0):  # TODO
+        """ Sort the values on an axis based by their relative rankings in
+            the index identified by idSortKey (where key is Term or Source)
+            on the other axis."""
         # identifier from opposite axis
         ascending = self._asc(ascending)
         if sortDim:  # normalize by total records for a given source
             key = lambda x: ascending * heatmap_data[idSortKey].get(x[0], 0) / heatmap_data[TOTAL_TERM_ID][x[0]]
         else:  # normalize by total hits for a given term
-            key = lambda x: ascending * heatmap_data[x[0]].get(idSortKey, 0) / sum(heatmap_data[x[0]].values())  # FIXME division by zero is possible here!
+            def key(x):
+                denom = sum(heatmap_data[x[0]].values())
+                if not denom: # avoid division by zero
+                    return 0
+                numer = ascending * heatmap_data[x[0]].get(idSortKey, 0) 
+                return numer / denom
+            #key = lambda x: ascending * heatmap_data[x[0]].get(idSortKey, 0) / sum(heatmap_data[x[0]].values())   # FIXME division by zero is possible here!
 
         return self.sorted, key
 
     def frequency(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort based on the number indicies (columns when rows, rows when columns)
+            with at least one occurence divided by the total number of indicies.
+            This gives a simple measure of frequency of occurance across data sources
+            for a single term. This can be interpreted as diversity of use of a term
+            or diversity of coverage for a datasource."""
         ascending = self._asc(ascending)
         if sortDim:
             key = lambda x: ascending * len([v for v in heatmap_data.values() if x[0] in v])
@@ -580,6 +606,8 @@ class sortstuff:
         return self.sorted, key
 
     def jaccard(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort the values on an axis based on the jaccard index from a given
+            value on that index. NOTE: Term and Source idSort are switched."""
         if sortDim:
             heatmap_data = self._invert_map(heatmap_data)
 
@@ -593,6 +621,9 @@ class sortstuff:
         return self.sorted, key
 
     def num_common_same_axis(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort the values on an axis based on the number of indexes on the other
+            axis having at least one hit that also have at least one hit for 
+            some reference value. NOTE: Term and Source idSort are switched."""
         if sortDim:
             heatmap_data = self._invert_map(heatmap_data)
 
@@ -608,6 +639,9 @@ class sortstuff:
         return self.sorted, key
 
     def norm_from_same_axis(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort the values on an axis by the distance between them where each row/column
+            is treated as an n-dimensional vector where n is the number of indexes on
+            the other axis. NOTE: Term and Source idSort are switched."""
         if sortDim:
             heatmap_data = self._invert_map(heatmap_data)
         
@@ -723,7 +757,9 @@ class heatmap_service(database_service):
 
         self.ppe = ProcessPoolExecutor()
 
+        # this seems a bad way to pass stuff out to the webapp?
         ss = sortstuff()
+        self.sort_docs = ss.docs
         self.sorts = ss.sorts
         self.sort = ss.sort
 
@@ -1064,6 +1100,11 @@ class heatmap_service(database_service):
 
         if term_coll_function:
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
+            if idSortSources not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
+                idSortSources = idSortSources.rsplit('-',1)[0]
+                if idSortSources not in term_id_coll_dict:
+                    embed()
+                    raise NameError('Identifier %s unknown!' % idSortSources)
         else:
             term_id_coll_dict = None
 
@@ -1080,16 +1121,8 @@ class heatmap_service(database_service):
 
         if src_coll_function:
             src_id_coll_dict, src_id_name_dict = src_coll_function(heatmap_data[TOTAL_TERM_ID], src_id_name_dict)
-            if idSortSources not in src_id_coll_dict:  # FIXME idSortSources is being used differently now :/
-                idSortSources = idSortSources.rsplit('-',1)[0]
-                if idSortSources not in src_id_coll_dict:
-                    embed()
-                    raise NameError('Identifier %s unknown!' % idSortSources)
         else:
             src_id_coll_dict = None
-
-        #FIXME PROBLEMS KIDS
-        idSortTerms, idSortSources = idSortSources, idSortTerms
 
         # apply the collapse dicts to the data, need to do before sorting for some sort options
         if term_id_coll_dict:
@@ -1097,6 +1130,9 @@ class heatmap_service(database_service):
 
         if src_id_coll_dict:
             heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
+
+        #FIXME PROBLEMS KIDS
+        #idSortTerms, idSortSources = idSortSources, idSortTerms
 
         # sort!
         term_id_order, term_name_order = self.sort(sortTerms,
