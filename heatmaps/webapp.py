@@ -96,16 +96,20 @@ class Form(Templated):  # FIXME separate callbacks? nah?
 
 class Select(Templated):
     TEMPLATE = """    <label>{{select_name}}</label>
-    <select name="{{select_name}}" number=30>
+    <select id="{{select_name}}" name="{{select_name}}" number=30>
     {% for opt, opt_val in options %}   <option value="{{opt}}">{{opt_val}}</option>
     {% endfor %}</select>"""
 
-    def __init__(self, name, options, opt_val=None):
+    def __init__(self, name, options, opt_val=None, onclick=''):
         self.name = name
         if opt_val:
             options = [(a, b) for a, b in zip(options, opt_val)]
         else:
             options = [(a, b) for a, b in zip(options, options)]
+
+        if onclick:
+            onclick = ' onclick="%s"' % onclick
+
         render_kwargs = dict(select_name=name, options=options)
         super().__init__(render_kwargs)
 
@@ -266,36 +270,113 @@ def hm_explore(hm_id):
     for name, args in select_mapping.items():
         explore_fields[name] = Select(name, *args).render()
 
-    base = '\n'.join((  '<!doctype html>',  # FIXME ICK
-                        '<title>NIF Heatmap {hm_id} exploration</title>',
-                        '<h1>Explore heatmap {hm_id}</h1>'
-                        '<h2>Created on: {date} at {time}</h2>',
-                        '<h3>Number of terms: {num_terms}</h3>',
-                        '<h3>Terms found in ontology: {num_matches}</h3>',
-                        '<br><br>',
-                        '<h2>Download configuration:</h2>',
-                        '<form action=submit/{hm_id} method=POST enctype=multipart/form-data target="_blank">',
-                            '<h3>Collapse options:</h3>',
-                            '{collTerms}',
-                            '{collSources} <br>',
-                            '<h3>Sorting Options:</h3>',
-                            '{sortTerms}',
-                            '{sortSources} <br>',
-                            '<h3>Identifier to sort against:</h3>',
-                            '{idSortTerms}',
-                            '{idSortSources} <br>',
-                            '<h3>Ascending:</h3>',
-                            '{ascTerms}',
-                            '{ascSources} <br>',
-                            '<h3>Filetype:</h3>',
-                            '{filetypes} <br><br>',
-                            '<input type=submit value=Generate>',
-                        '</form>',
-                        '<br><br>',
-                        '<h3>Expansion: putative term, curie, label, query</h3>',
-                        '<pre>\n{expansion}\n</pre>'))
+    js1 = """    <script>
+    window.onload = function (){jso}
+    document.getElementById("sortTerms").addEventListener("change", showTerms, false)
+    document.getElementById("sortSources").addEventListener("change", showSources, false)
+    {jsc}
+    var idSort = {idSortOps};
+    var idRef = {idRefOps};
+    function showTerms(){jso}
+        var style_any = document.getElementById("{anysort}").style
+        var style_iss = document.getElementById("{iss}").style
+        var style_irs = document.getElementById("{irs}").style
+        var style_ist = document.getElementById("{ist}").style
+        var style_irt = document.getElementById("{irt}").style
 
-    page = base.format(**explore_fields)
+        if (idSort.indexOf(this.value) > -1){jso}
+            style_any["display"] = ""
+            style_ist["display"] = ""
+            style_irt["display"] = "none"
+        {jsc}
+        else if (idRef.indexOf(this.value) > -1){jso}
+            style_any["display"] = ""
+            style_ist["display"] = "none"
+            style_irt["display"] = ""
+        {jsc}
+        else {jso}
+            style_ist["display"] = "none"
+            style_irt["display"] = "none"
+            if (style_iss["display"] == "none" && style_irs["display"] == "none"){jso}
+                style_any["display"] = "none"
+            {jsc}
+        {jsc}
+    {jsc}
+    function showSources(){jso}
+        var style_any = document.getElementById("{anysort}").style
+        var style_iss = document.getElementById("{iss}").style
+        var style_irs = document.getElementById("{irs}").style
+        var style_ist = document.getElementById("{ist}").style
+        var style_irt = document.getElementById("{irt}").style
+
+        if (idSort.indexOf(this.value) > -1){jso}
+            style_any["display"] = ""
+            style_iss["display"] = ""
+            style_irs["display"] = "none"
+        {jsc}
+        else if (idRef.indexOf(this.value) > -1){jso}
+            style_any["display"] = ""
+            style_iss["display"] = "none"
+            style_irs["display"] = ""
+        {jsc}
+        else {jso}
+            style_iss["display"] = "none"
+            style_irs["display"] = "none"
+            if (style_ist["display"] == "none" && style_irt["display"] == "none"){jso}
+                style_any["display"] = "none"
+            {jsc}
+        {jsc}
+    {jsc}
+    </script>"""
+
+    base = '\n'.join((
+        '<!doctype html>',  # FIXME ICK
+        '<title>NIF Heatmap {hm_id} exploration</title>',
+        '<h1>Explore heatmap {hm_id}</h1>'
+        '<h2>Created on: {date} at {time}</h2>',
+        '<h3>Number of terms: {num_terms}</h3>',
+        '<h3>Terms found in ontology: {num_matches}</h3>',
+        '<br><br>',
+        '<h2>Download configuration:</h2>',
+        '<form action=submit/{hm_id} method=POST enctype=multipart/form-data target="_blank">',
+            '<h3>Collapse options:</h3>',
+            '{collTerms}',
+            '{collSources} <br>',
+            '<h3>Sorting Options:</h3>',
+            '{sortTerms}',
+            '{sortSources} <br>',
+
+            '<div id={anysort} style="display:none;">',  # FIXME may want to default away from display:none and add it if we have js?
+            '<h3>Reference value or identifier to sort against:</h3>',
+                '<div id={ist} style="display:none;">',
+                '{idSortTerms}',
+                '</div>',
+                '<div id={irt} style="display:none;">',
+                '{idRefTerms}',
+                '</div>',
+                '<br>',
+                '<div id={iss} style="display:none;">',
+                '{idSortSources}',
+                '</div>',
+                '<div id={irs} style="display:none;">',
+                '{idRefSources}',
+                '</div>',
+                '<br>',
+            '</div>',
+
+            '<h3>Ascending:</h3>',
+            '{ascTerms}',
+            '{ascSources} <br>',
+            '<h3>Filetype:</h3>',
+            '{filetypes} <br><br>',
+            '<input type=submit value=Generate>',
+        '</form>',
+        '<br><br>',
+        '<h3>Expansion: putative term, curie, label, query</h3>',
+        '<pre>\n{expansion}\n</pre>',
+        js1))
+
+    page = base.format(jso='{', jsc='}', **explore_fields)  # python format is stupid
 
     return page
 

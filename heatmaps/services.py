@@ -508,10 +508,20 @@ class ontology_service(rest_service):
 #   Sorting!
 ###
 
+def idSortSame(function):
+    function.__sort_same__ = True
+    return function
+
+def idSortOther(function):
+    function.__sort_other__ = True
+    return function
+
 class sortstuff:
     def __init__(self):
         # build a list of valid sort types from methods to populate the menus automatically
         self.sorts = [n for n in dir(self) if not n.startswith('_') and n != 'get_sort' and n != 'sort']
+        self.same = [n for n in dir(self) if hasattr(getattr(self, n), '__sort_same__')]
+        self.other = [n for n in dir(self) if hasattr(getattr(self, n), '__sort_other__')]
         # first pass alpha to avoid unstable sort issues
         self.sorted = lambda collection, key: sorted(sorted(collection), key=key)
         self._make_docs()
@@ -573,6 +583,7 @@ class sortstuff:
         key = lambda x: x[1]
         return sorted_, key
 
+    @idSortOther
     def identifier(self, heatmap_data, idSortKey, ascending=True, sortDim=0):  # TODO
         """ Sort the values on an axis based by their relative rankings in
             the index identified by idSortKey (where key is Term or Source)
@@ -605,6 +616,7 @@ class sortstuff:
             key = lambda x: ascending * len([v for v in heatmap_data[x[0]].values() if v > 0])
         return self.sorted, key
 
+    @idSortSame
     def jaccard(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
         """ Sort the values on an axis based on the jaccard index from a given
             value on that index. NOTE: Term and Source idSort are switched."""
@@ -620,6 +632,7 @@ class sortstuff:
 
         return self.sorted, key
 
+    @idSortSame
     def num_common_same_axis(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
         """ Sort the values on an axis based on the number of indexes on the other
             axis having at least one hit that also have at least one hit for 
@@ -638,6 +651,7 @@ class sortstuff:
 
         return self.sorted, key
 
+    @idSortSame
     def norm_from_same_axis(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
         """ Sort the values on an axis by the distance between them where each row/column
             is treated as an n-dimensional vector where n is the number of indexes on
@@ -761,6 +775,8 @@ class heatmap_service(database_service):
         ss = sortstuff()
         self.sort_docs = ss.docs
         self.sorts = ss.sorts
+        self.sort_same = ss.same
+        self.sort_other = ss.other
         self.sort = ss.sort
 
     def check_counts(self):
@@ -1108,6 +1124,13 @@ class heatmap_service(database_service):
             'time':time,
             'date':date,
             'expansion':expansion,
+            'anysort':'name1', # FIXME better naming here?
+            'ist':'name2',
+            'irt':'name3',
+            'iss':'name4',
+            'irs':'name5',
+            'idSortOps':str(self.sort_other).replace("'",'"'),
+            'idRefOps':str(self.sort_same).replace("'",'"'),
         }
 
         srcs = sorted([(k, ' '.join(v)) for k, v in self.resources.items()], key=lambda a: a[1].lower())
@@ -1119,7 +1142,9 @@ class heatmap_service(database_service):
                         'sortTerms':(self.sorts, ),
                         'sortSources':(self.sorts, ),
                         'idSortTerms':(src_ids, src_names),
-                        'idSortSources':(sorted(heatmap_data), ),
+                        'idSortSources':(sorted(heatmap_data, key=lambda x: x.lower()), ),
+                        'idRefTerms':(sorted(heatmap_data, key=lambda x: x.lower()), ),
+                        'idRefSources':(src_ids, src_names),
                         'ascTerms':((True, False), ),
                         'ascSources':((True, False), ),
                         'filetypes':(sorted([str(m) for m in self.mimetypes]), ),
