@@ -230,14 +230,30 @@ terms_form = Form("NIF heatmaps from terms",
 
 @hmapp.route(ext_path + "/explore/submit/<hm_id>", methods = ['POST'])
 def hm_viz(hm_id):
+    sortTerms = request.form['sortTerms']
+    if sortTerms in hmserv.sort_other:
+        idSortTerms = request.form['idSortTerms']
+    elif sortTerms in hmserv.sort_same:
+        idSortTerms = request.form['idRefTerms']
+    else:
+        idSortTerms = None
+
+    sortSources = request.form['sortSources']
+    if sortSources in hmserv.sort_other:
+        idSortSources = request.form['idSortSources']
+    elif sortSources in hmserv.sort_same:
+        idSortSources = request.form['idRefSources']
+    else:
+        idSortSources = None
+
     args = (hm_id,
             request.form['filetypes'],
             request.form['collTerms'],
             request.form['collSources'],
-            request.form['sortTerms'],
-            request.form['sortSources'],
-            request.form['idSortTerms'],
-            request.form['idSortSources'],
+            sortTerms,
+            sortSources,
+            idSortTerms,
+            idSortSources,
             request.form['ascTerms'],
             request.form['ascSources'])
 
@@ -275,15 +291,17 @@ def hm_explore(hm_id):
     document.getElementById("sortTerms").addEventListener("change", showTerms, false)
     document.getElementById("sortSources").addEventListener("change", showSources, false)
     {jsc}
+
     var idSort = {idSortOps};
     var idRef = {idRefOps};
-    function showTerms(){jso}
-        var style_any = document.getElementById("{anysort}").style
-        var style_iss = document.getElementById("{iss}").style
-        var style_irs = document.getElementById("{irs}").style
-        var style_ist = document.getElementById("{ist}").style
-        var style_irt = document.getElementById("{irt}").style
 
+    var style_any = document.getElementById("{anysort}").style
+    var style_iss = document.getElementById("{iss}").style
+    var style_irs = document.getElementById("{irs}").style
+    var style_ist = document.getElementById("{ist}").style
+    var style_irt = document.getElementById("{irt}").style
+
+    function showTerms(){jso}
         if (idSort.indexOf(this.value) > -1){jso}
             style_any["display"] = ""
             style_ist["display"] = ""
@@ -302,13 +320,8 @@ def hm_explore(hm_id):
             {jsc}
         {jsc}
     {jsc}
-    function showSources(){jso}
-        var style_any = document.getElementById("{anysort}").style
-        var style_iss = document.getElementById("{iss}").style
-        var style_irs = document.getElementById("{irs}").style
-        var style_ist = document.getElementById("{ist}").style
-        var style_irt = document.getElementById("{irt}").style
 
+    function showSources(){jso}
         if (idSort.indexOf(this.value) > -1){jso}
             style_any["display"] = ""
             style_iss["display"] = ""
