@@ -744,7 +744,7 @@ class heatmap_service(database_service):
     user = "heatmapuser"
     port = 5432
     TERM_MIN = 5
-    #supported_filetypes = None, 'csv', 'json', 'png'
+    supported_filetypes = None, 'csv', 'json', 'png'  # need for output
     mimetypes = {None:'text/plain',
                  'csv':'text/csv',
                  'json':'application/json',
