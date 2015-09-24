@@ -1070,6 +1070,64 @@ class heatmap_service(database_service):
         #png = make_png(matrix, row_names, col_names, title)
         return png, self.mimetypes['png']
 
+    def input_validation(self, heatmap_data, *args, **kwargs):
+        return None
+
+    def explore(self, hm_id):  # TODO: match naming schemes so that the data organization lives here and the formatting lives in webapp?
+        """ Generate the input data for select fields
+            in a way that enables safe validation."""
+
+        timestamp = self.get_timestamp_from_id(hm_id)
+        if not timestamp:
+            return None, None  # FIXME make sure to map back to abort(404)
+        else:
+            date, time = timestamp.split('T')
+
+        heatmap_data = self.get_heatmap_data_from_id(hm_id)
+
+
+        tuples = [[v if v is not None else '' for v in self.term_server.term_id_expansion(term)]
+                  for term in heatmap_data]
+        num_matches = len([t for t in tuples if t[1]])
+        cols = [c for c in zip(*tuples)]
+        justs = [max([len(s) for s in col]) + 1 for col in cols]
+        cols2 = []
+        for i, just in enumerate(justs):
+            cols2.append([s.ljust(just) for s in cols[i]])
+
+        titles = ''.join([s.ljust(just) for s, just
+                          in zip(('Input', 'CURIE', 'Label', 'Query'), justs)])
+
+        rows = [titles] + sorted([''.join(r) for r in zip(*cols2)])
+        expansion = '\n'.join(rows)
+
+        explore_fields = {
+            'hm_id':hm_id,
+            'num_terms':len(heatmap_data),
+            'num_matches':num_matches,
+            'time':time,
+            'date':date,
+            'expansion':expansion,
+        }
+
+        srcs = sorted([(k, ' '.join(v)) for k, v in self.resources.items()], key=lambda a: a[1].lower())
+        src_ids, src_names = [a for a in zip(*srcs)]
+
+        select_mapping = {  # store this until... when?
+                        'collTerms':(self.collTerms, ),
+                        'collSources':(self.collSources, ),
+                        'sortTerms':(self.sorts, ),
+                        'sortSources':(self.sorts, ),
+                        'idSortTerms':(src_ids, src_names),
+                        'idSortSources':(sorted(heatmap_data), ),
+                        'ascTerms':((True, False), ),
+                        'ascSources':((True, False), ),
+                        'filetypes':(sorted([str(m) for m in self.mimetypes]), ),
+        }
+
+        return explore_fields, select_mapping
+
+
     def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,
                collTerms=None, collSources=None, idSortTerms=None, idSortSources=None,
                ascTerms=True, ascSources=True):
