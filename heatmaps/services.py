@@ -540,12 +540,12 @@ class sortstuff:
 
     def _invert_map(self, heatmap_data):
         inverted = {}
-        for outer_key, dict_ in heatmap_data:
-            for inner_key, number, in dict_:
+        for outer_key, dict_ in heatmap_data.items():
+            for inner_key, number in dict_.items():
                 if inner_key not in inverted:
                     inverted[inner_key] = {}
 
-                inverted[inner_key][out_key] = number
+                inverted[inner_key][outer_key] = number
 
         return inverted
 
