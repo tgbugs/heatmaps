@@ -277,8 +277,10 @@ class term_service():  # FURL PLS
         return cleaned_terms
 
     def get_equiv_classes(self, curie):
+        if curie is None:
+            raise TypeError('curie is None!')
         json = graph.getNeighbors(curie, relationshipType='equivalentClass')
-        if not json:
+        if json is None:
             return (curie,), (curie,)
 
         syns = set()
@@ -326,9 +328,10 @@ class term_service():  # FURL PLS
                 print('record found at score', score)
                 if len(records) == 1:
                     record = records[0]
-                    curie = record['curie']
-                    new_cs, new_syns = self.get_equiv_classes(curie)
-                    return new_cs, new_syns, (record['curie'], record['labels'][0])
+                    if record['curie'] is not None:
+                        curie = record['curie']
+                        new_cs, new_syns = self.get_equiv_classes(curie)
+                        return new_cs, new_syns, (curie, record['labels'][0])
                 else:  # CURIE preference ordering if there are multiples at the same lvl
                     # cscore will be by max number of matching equiv curies (min is 1)
                     # that is 1 then we fail over to total equiv curies
