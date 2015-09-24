@@ -153,6 +153,7 @@ def make_png(matrix, row_names, col_names, title, destdir, poster=False, async=F
     ax2 = fig.add_subplot(gs[1], sharey=ax1)
 
     #axis 1
+    discretize(matrix)  # kinda important to call this ya know...
     img = ax1.imshow(matrix, interpolation='nearest', cmap=plt.cm.get_cmap('Greens'), aspect='auto',vmin=0,vmax=3)
 
     #axes
