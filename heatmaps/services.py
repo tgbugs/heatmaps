@@ -70,9 +70,6 @@ JOIN term_history AS th ON th.id=junc.term_history_id
 WHERE hp.done_datetime IS NULL AND th.term_counts IS NOT NULL;
 """
 
-#SHOULD PROV also be handled here?
-#SHOULD odering of rows and columns go here? NO
-# TODO probably need to make this work via cgi? (probably not cgi)
 # TODO logging and perf
 
 ### THINGS THAT GO ELSEWHERE
@@ -85,8 +82,6 @@ WHERE hp.done_datetime IS NULL AND th.term_counts IS NOT NULL;
 #the ORDER of the columns in the source is also NOT STATIC
 #the mapping is to identifiers
 #we must use a dict/hstore and THEN map to columns
-#the dict is singular and provides the translation for fast lookup and manages history and changes
-#the dict should probably be versioned and only track deltas so that we do not have to duplicate rows
 
 ###
 #   urls that may change, and identifiers that need to be defined globally
@@ -100,6 +95,14 @@ TOTAL_TERM_ID_NAME = 'Federation Totals'
 ###
 #   Decorators
 ###
+def idSortSame(function):
+    function.__sort_same__ = True
+    return function
+
+def idSortOther(function):
+    function.__sort_other__ = True
+    return function
+
 def sanitize_input(function):
     """ Right now this is just a reminder function to flag functions that
         need to have their input sanitized since they are inserted into the sql
@@ -471,53 +474,8 @@ class term_service():  # FURL PLS
         return json['labels'][0] if json else None
 
 ###
-#   Ontology services
-###
-
-class ontology_service(rest_service):
-    url = SCIGRAPH + "/scigraph/graph/neighbors/%s.json?depth=10&blankNodes=false&relationshipType=%s&direction=INCOMING"
-    _timeout = 10
-    def get_terms(self, term_id, relationship):
-        query_url = self.url % (term_id, relationship)
-        records = self.get(query_url, 'json')
-        names = []
-        for rec in records['edges']:
-            if term_id in rec.values():
-                for node in records['nodes']:
-                    if node['id'] == rec['sub']:
-                        names.append(node['lbl'])
-
-        #FIXME the test on part of produces utter madness, tree is not clean
-        return records, names
-
-    def order_nifids(self, nifids, rule):  # TODO
-        """ given a set of nifids use some rule to order them
-
-            also needs to handle a mixture of terms and nifids
-
-            and stick everything that can't be ordered into its own group
-        """
-
-        # note that the "rule" is almost certainly going to be some dsl ;_;
-        # or I'm just going to implement a bunch of precanned ways to order stuff
-        # and then the rule would just be a string mapped to a function 
-
-        # XXX ANOTHER NOTE: given a set of terms, use the ontology to expand
-        # to similar terms by traversing back up to common nodes and then
-        # back down, the problem of course is all the relationships in UBERON
-        # are now dirty >_< (and synonyms suck)
-
-###
 #   Sorting!
 ###
-
-def idSortSame(function):
-    function.__sort_same__ = True
-    return function
-
-def idSortOther(function):
-    function.__sort_other__ = True
-    return function
 
 class sortstuff:
     def __init__(self):
