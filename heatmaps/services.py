@@ -27,6 +27,7 @@ else:
 from .visualization import applyCollapse, dict_to_matrix, sCollapseToSrcId, make_png
 from .scigraph_client import Graph, Vocabulary
 
+
 # initilaize scigraph services
 graph = Graph()
 vocab = Vocabulary()
@@ -161,7 +162,7 @@ class rest_service:  #TODO this REALLY needs to be async... with max timeout "co
 #   Retrieve summary per term
 ###
 
-class summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
+class xml_summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
     old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
     url = "http://beta.neuinfo.org/services/v1/summary.xml?q=%s"
     url, old_url = old_url, url
@@ -332,6 +333,7 @@ class json_summary_service:  # FIXME implement as a service/coro? with asyncio?
         return nifid_count
 
 
+summary_service = json_summary_service
 
 ###
 #   Map terms to ids  FIXME we need some way to resolve multiple mappings to ids ;_;
@@ -1289,14 +1291,21 @@ def str_cast(dict):
 ###
 
 def main():
-    embed()
-    return
-    ts = term_service()
-    ss = summary_service()
-    os = ontology_service()
-    t = "UBERON_0000955"  # FIXME a reminder that these ontologies do not obey tree likeness and make everything deeply, deeply painful
-    r = "BFO_0000050"
-    j = os.get_terms(t, r)
+    
+    jss = json_summary_service()
+    xss = summary_service()
+    #test terms
+    brain = 'UBERON_0000955'
+
+    # make sure to from desc.prof import profile_me and decorate
+    # run twice to make sure that the result is cached
+    jss.get_sources()
+    jss.get_counts(brain)
+
+    xss.get_sources()
+    xss.get_counts(brain)
+    
+    #embed()
 
 
 if __name__ == '__main__':
