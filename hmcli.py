@@ -15,7 +15,7 @@ from IPython import embed
 
 from util.dbsetup import setup_db
 from tests.dbtest import test
-from heatmaps.services import term_service, ontology_service, heatmap_service
+from heatmaps.services import term_service, heatmap_service
 
 def main():
     args = docopt(__doc__, version='heatmaps .0001')
