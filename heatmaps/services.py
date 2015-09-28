@@ -17,7 +17,6 @@ from concurrent.futures import ProcessPoolExecutor
 import requests
 import psycopg2 as pg
 from psycopg2.extras import register_hstore
-from lxml import etree
 
 if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
@@ -115,151 +114,10 @@ def sanitize_input(function):
     return wrapped
 
 ###
-#   base class for getting XML or json from various servies
-###
-
-class rest_service:  #TODO this REALLY needs to be async... with max timeout "couldnt do x terms"
-    """ base class for things that need to get json docs from REST services
-    """
-    _timeout = 1
-    _cache_xml = 0  #FIXME we may want to make this toggle w/o having to restart all the things
-    def __new__(cls, *args, **kwargs):
-        """ here for now to all hardcoded cache stuff """
-        if cls._cache_xml:
-            cls._xml_cache = {}
-        instance = super().__new__(cls)
-        return instance
-
-    def get(self, url, response_type):
-        response = requests.get(url, timeout=self._timeout)
-        if response.ok:
-            if response_type == 'xml':
-                return response.text
-            elif response_type == 'json':
-                return response.json()
-            else:
-                return response.text
-        else:
-            print("Get of %s failed %s %s" % (url, response.status_code, response.reason))
-            raise ConnectionError("Get of %s failed %s %s" % (url, response.status_code, response.reason))
-
-    def xpath(self, xml, *queries):
-        """ Run a set of xpath queries. """
-        try:
-            xmlDoc = etree.fromstring(xml.encode())
-        except etree.ParseError:
-            raise  # TODO
-        
-        results = [xmlDoc.xpath(query) for query in queries]
-
-        if len(results) == 1:
-            return results[0]
-        else:
-            return tuple(results)
-
-
-###
 #   Retrieve summary per term
 ###
 
-class xml_summary_service(rest_service):  # FIXME implement as a service/coro? with asyncio?
-    old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.xml?q=%s"
-    url = "http://beta.neuinfo.org/services/v1/summary.xml?q=%s"
-    url, old_url = old_url, url
-    _timeout = 20
-
-    missing_ids = 'nif-0000-21197-1', 'nif-0000-00053-2'
-    @staticmethod
-    def _walk_nodes(nodes, *keys):
-        """ always return counts, any extra vals goes their own dict """
-        resource_data_dict = {}
-        nifid_count = {}
-        for node in nodes:
-            if node.get('nifId') not in resource_data_dict:  # cull dupes
-                nifId = node.get('nifId')
-
-                putative_count = node.xpath('./count')
-                if len(putative_count) > 1:
-                    print(TOTAL_TERM_ID, TOTAL_TERM_ID_NAME, [c.content for c in putative_count])
-                    raise IndexError('too many counts!')  #FIXME we must handle this
-                count = int(putative_count[0].text)
-                nifid_count[nifId] = count
-
-                if keys:
-                    vals = tuple([node.get(key) for key in keys])
-                    resource_data_dict[nifId] = vals
-
-        if keys: print("KEYS?", keys)
-        return (nifid_count, resource_data_dict) if keys else nifid_count
-
-    def get_sources(self):
-        """
-            get the complete list of data sources
-            the structure for each nifid is as follows:
-
-            (database name, indexable)
-            a dict of nifid_count_total is also returned matching the format
-            of other nifid_count dictionaires, this one is considered to be
-            the "difninitive" record of the number of sources
-
-            check results against cm, but be aware that 
-        """
-        query_url = self.url % '*'
-        xml = self.get(query_url, 'xml')
-        nodes, lit = self.xpath(xml, '//results/result', '//literatureSummary/@resultCount')  # FIXME these queries do need to go up top to make it easier to track and modify them as needed
-
-        nifid_count_total, resource_data_dict = self._walk_nodes(nodes, 'db', 'indexable')
-
-        resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature')
-        nifid_count_total[LITERATURE_ID] = int(lit[0])
-
-        # For compatibility we include the 'old' data as well since stuff doesn't overlap :/
-        # man I hope we never get rid of a view :/
-        old_query_url = self.old_url % '*'
-        old_xml = self.get(old_query_url, 'xml')
-        old_nodes, old_lit = self.xpath(old_xml, '//results/result', '//literatureSummary/@resultCount')  # FIXME these queries do need to go up top to make it easier to track and modify them as needed
-        old_nifid_count_total, old_resource_data_dict = self._walk_nodes(old_nodes, 'db', 'indexable')
-        resource_data_dict.update(old_resource_data_dict)  # URG
-
-        # TODO once this source data has been retrieved we should really go ahead and make sure the database is up to date
-        return resource_data_dict, nifid_count_total
-
-    def get_counts(self, term):  #FIXME this really needs to be async or something
-        # FIXME we need anaomoly detection here! if we are suddenly getting back no results!
-        """
-            given a term return a dict of counts for each unique src_nifid
-
-            IDS ARE NOT HANDLED HERE
-            TERM MUNGING NOT HERE EITHER
-        """
-        if ' '  in term:  # we need to do this here, users shouldn't see this
-            term = '"%s"' % term
-        query_url = self.url % term  # any preprocessing of the term BEFORE here
-
-        print('summary query url:', query_url)
-        xml = self.get(query_url, 'xml')
-        nodes, name, lit = self.xpath(xml, '//results/result', '//clauses/query',
-                                      '//literatureSummary/@resultCount')
-
-        #TODO we need to gather all the metadata about the expansion used
-
-        #FIXME do we even need name anymore if we aren't dealing with ids in here?
-        #TODO deal with names and empty nodes
-
-        #FIXME this fails when there is a space because it applies AND instead of quoting
-        name = name[0].text # return EXACT queries that were used
-        if name != term:
-            print('for some reason name != term: %s != %s'%(name, term))
-            #raise TypeError('for some reason name != term: %s != %s'%(name, term))
-
-        nifid_count = self._walk_nodes(nodes)
-        #print("nifid_count", nifid_count)
-        nifid_count[LITERATURE_ID] = int(lit[0])
-
-        return nifid_count
-
-
-class json_summary_service:  # FIXME implement as a service/coro? with asyncio?
+class summary_service:  # FIXME implement as a service/coro? with asyncio?
     old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.json?q=%s"
     url = "http://beta.neuinfo.org/services/v1/summary.json?q=%s"
     url, old_url = old_url, url
@@ -332,8 +190,6 @@ class json_summary_service:  # FIXME implement as a service/coro? with asyncio?
 
         return nifid_count
 
-
-summary_service = json_summary_service
 
 ###
 #   Map terms to ids  FIXME we need some way to resolve multiple mappings to ids ;_;

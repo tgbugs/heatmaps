@@ -14,7 +14,6 @@ setup(
     packages = find_packages(exclude=['tests*', 'util*']),
     install_requires=[
         'docopt',
-        'lxml',
         'numpy',
         'psycopg2',
         'requests',
