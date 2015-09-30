@@ -181,9 +181,12 @@ def do_terms(terms):
             <br>
             <a href={url}.png>{url}.png</a>
             <br><br>
+            You can also explore your heatmap data here: <br>
+            <a href={exp_url}>{exp_url}</a>
+            <br><br>
             If you ever need to download your heatmap again you can get it again
             as long as you know your heatmap id which is {id}.
-            """.format(url=base_url + '/prov/' + str(hp_id), id=hp_id)
+            """.format(url=base_url + '/prov/' + str(hp_id), id=hp_id, exp_url=base_url + '/explore/' + str(hp_id))
     return output
 
 
