@@ -9,7 +9,7 @@
 
 """
 
-import simplejson
+import json
 from functools import wraps
 from os import environ, path
 from concurrent.futures import ProcessPoolExecutor
@@ -141,10 +141,10 @@ class summary_service:  # FIXME implement as a service/coro? with asyncio?
             check results against cm, but be aware that 
         """
         query_url = self.url % '*'
-        json = self.get(query_url)
+        json_data = self.get(query_url)
 
-        datasources = json['result']['federationSummary']['results']
-        lit_count = json['result']['literatureSummary']['resultCount']
+        datasources = json_data['result']['federationSummary']['results']
+        lit_count = json_data['result']['literatureSummary']['resultCount']
 
         nifid_count_total = {d['nifId']:d['count'] for d in datasources}
         resource_data_dict = {d['nifId']:(d['db'], d['indexable']) for d in datasources}
@@ -404,8 +404,8 @@ class term_service():  # FURL PLS
         tid = tid.replace('_',':')  # FIXME this will only work SOMETIMES
         if ' ' in tid or ':' not in tid:  # no space in ids & SG>1.5 requries cuires
             return None
-        json = vocab.findById(tid)  # FIXME cache this stuff?
-        return json['labels'][0] if json else None
+        json_data = vocab.findById(tid)  # FIXME cache this stuff?
+        return json_data['labels'][0] if json_data else None
 
 ###
 #   Sorting!
@@ -957,7 +957,7 @@ class heatmap_service(database_service):
 
     def output_json(self, heatmap_data, *args, **kwargs):
         """ return a json object with the raw data and the src_id and term_id mappings """
-        return simplejson.dumps(heatmap_data), self.mimetypes['json']
+        return json.dumps(heatmap_data), self.mimetypes['json']
 
     def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
         term_name_order = list(term_name_order)

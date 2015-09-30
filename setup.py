@@ -19,7 +19,6 @@ setup(
         'requests',
         'ipython',
         'flask',
-        'simplejson',
     ],
     #extras_require
     #package_data
