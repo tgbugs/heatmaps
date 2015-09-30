@@ -767,7 +767,8 @@ class heatmap_service(database_service):
         
         #try the failed terms again, if the issue was a long timeout it should be cached by now
         if failed_terms and retry:
-            term_count_dict, failed_terms = self.get_term_counts(failed_terms, retry=False)
+            fail_term_count_dict, failed_terms = self.get_term_counts(failed_terms, retry=False)
+            term_count_dict.update(fail_term_count_dict)
         return term_count_dict, failed_terms
 
     def get_terms_from_ontology(self, term):
