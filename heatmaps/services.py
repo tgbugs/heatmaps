@@ -207,11 +207,20 @@ class term_service():  # FURL PLS
         terms = tuple(set([TOTAL_TERM_ID]+list(terms)))  #removes dupes
 
         cleaned_terms = []
+        bad_terms = []
         for term in terms:
             term = term.strip().rstrip().strip('"').strip().rstrip()  # insurance
             cleaned_terms.append(term)
+            if ':' in term and ' ' not in term:
+                reason = ('Colon detected in term without a space. '
+                'Please remove the colon, it will cause a parse error')
+                bad_terms.append((term, reason))
+            elif '&' in term:
+                reason = ('Ampresand detect in term. '
+                'Please remove the ampresand, it will cause a parse error.')
+                bad_terms.append((term, reason))
 
-        return cleaned_terms
+        return cleaned_terms, bad_terms
 
     def get_equiv_classes(self, curie):
         if curie is None:
@@ -737,13 +746,11 @@ class heatmap_service(database_service):
         else:
             return None
 
-    def get_term_counts(self, terms, *args, retry=True):  #FIXME this fails if given an id!
+    def get_term_counts(self, cleaned_terms, *args, retry=True):  #FIXME this fails if given an id!
         """ given a collection of terms returns a dict of dicts of their counts
             this is where we make calls to summary_server, we are currently handling
             term failures in here which seems to make sense for time efficiency
         """
-        cleaned_terms = self.term_server.terms_preprocessing(terms)  # clean terms
-        terms = None  # insurance against stupidity
         term_count_dict = {}
         failed_terms = []
         for term in cleaned_terms:
@@ -828,7 +835,7 @@ class heatmap_service(database_service):
         return name_order
 
     @sanitize_input
-    def make_heatmap_data(self, terms):  # FIXME error handling
+    def make_heatmap_data(self, cleaned_terms):  # FIXME error handling
         # SUEPER DUPER FIXME this has to be converted to async :/ preferably in webapp.py
         # FIXME FIXME, caching and detection of existing heatmaps is BROKEN
         # 1) we invalidate caches incorrectly and we can be fooled by a cached
@@ -840,6 +847,7 @@ class heatmap_service(database_service):
         """ this call mints a heatmap and creates the prov record
             this is also where we will check to see if everything is up to date
         """
+        terms = cleaned_terms  # translation
         self.check_counts() #call to * to validate counts
         hm_data, fails = self.get_term_counts(terms)  # call this internally to avoid race conds
         

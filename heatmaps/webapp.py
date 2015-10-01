@@ -82,7 +82,8 @@ class Form(Templated):  # FIXME separate callbacks? nah?
                 print(field, 'data_received', out)
                 if out:
                     if type(out) == str:  #FIXME all callbacks need to return a response object or nothing
-                        return 'Your submisison is processing, your number is # \n' + out
+                        #return 'Your submisison is processing, your number is # \n' + out
+                        return out
                         return self.render() + "<br>" + out  # rerender the original form but add the output of the callback
                     else:
                         return out
@@ -165,7 +166,12 @@ def do_terms(terms):
     if not terms:
         print('no terms!')
         return None
-    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(terms)
+
+    cleaned_terms, bad_terms = hmserv.term_server.terms_preprocessing(terms)  # FIXME :/
+    if bad_terms:
+        return 'Bad terms detected! Please fix and resubmit!<br>' + repr(bad_terms)
+
+    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(cleaned_terms)
     if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
         return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
     #return repr((hm_data, hp_id, timestamp))
