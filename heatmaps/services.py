@@ -89,7 +89,7 @@ WHERE hp.done_datetime IS NULL AND th.term_counts IS NOT NULL;
 
 SCIGRAPH = "http://matrix.neuinfo.org:9000"
 LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
-TOTAL_TERM_ID = 'federation_totals'  # FIXME we need to come up with a name for this though because * is reserved in sql
+TOTAL_TERM_ID = 'federation_totals'  # DO NOT CHANGE
 TOTAL_TERM_ID_NAME = 'Federation Totals'
 
 ###
@@ -525,13 +525,22 @@ class sortstuff:
             key = lambda x: ascending * len([v for v in heatmap_data[x[0]].values() if v > 0])
         return self.sorted, key
 
+    def total_count(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort based on the sum of the values
+            for all indicies on the opposite axis."""
+        ascending = self._asc(ascending)
+        if sortDim:
+            key = lambda x: ascending * sum([v[x[0]] for v in heatmap_data.values() if x[0] in v])
+        else:
+            key = lambda x: ascending * sum([v for v in heatmap_data[x[0]].values() if v > 0])
+        return self.sorted, key
+
     def name_length(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
         """ Sort based on the number of characters in the name
             of the term or source."""
         ascending = self._asc(ascending)
         key = lambda x: ascending * len(x[1])
         return self.sorted, key
-
 
     @idSortSame
     def jaccard(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
