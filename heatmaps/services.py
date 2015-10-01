@@ -530,12 +530,13 @@ class sortstuff:
         if sortDim:
             heatmap_data = self._invert_map(heatmap_data)
 
+        ascending = self._asc(ascending)
         def key(x):
             ref = heatmap_data[idSortKey]
             targ = heatmap_data[x[0]]
             ref = set(ref)
             targ = set(targ)
-            return len(ref.intersection(targ))/len(ref.union(targ))
+            return ascending * len(ref.intersection(targ))/len(ref.union(targ))
 
         return self.sorted, key
 
@@ -547,6 +548,7 @@ class sortstuff:
         if sortDim:
             heatmap_data = self._invert_map(heatmap_data)
 
+        ascending = self._asc(ascending)
         def key(x):
             ref = heatmap_data[idSortKey]
             targ = heatmap_data[x[0]]
@@ -554,7 +556,7 @@ class sortstuff:
             for key in ref:
                 if key in targ:
                     rank += 1
-            return rank
+            return ascending * rank
 
         return self.sorted, key
 
@@ -566,6 +568,7 @@ class sortstuff:
         if sortDim:
             heatmap_data = self._invert_map(heatmap_data)
         
+        ascending = self._asc(ascending)
         def key(x):
             ref = heatmap_data[idSortKey]
             targ = heatmap_data[x[0]]
@@ -581,7 +584,7 @@ class sortstuff:
                     diffs[key] = t ** 2  # reference value is zero
 
 
-            return sum(diffs.values()) ** .5
+            return ascending * sum(diffs.values()) ** .5
 
         return self.sorted, key
 
@@ -978,7 +981,12 @@ class heatmap_service(database_service):
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
         limit = 1500
         if len(matrix) > limit:
-            return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
+            #return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
+            matrix = matrix[:limit]
+            term_name_order = term_name_order[:limit]
+            src_name_order = src_name_order[:limit]
+            term_id_order = term_id_order[:limit]
+            src_id_order = src_id_order[:limit]
 
         if title.endswith('.png'):
             title = title[:-4]
