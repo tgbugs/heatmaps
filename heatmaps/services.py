@@ -253,9 +253,12 @@ class term_service():  # FURL PLS
         """
         scores = [[], [], [], [], []]
         for record in record_list:
-            label = record['labels'][0]
+            label = record['labels'][0] if record['labels'] else None
             syns = record['synonyms']
-            if term == label:
+
+            if label == None:
+                continue  # DO NOT WANT
+            elif term == label:
                 scores[0].append(record)
             elif term.lower() == label.lower():
                 scores[1].append(record)
@@ -277,7 +280,7 @@ class term_service():  # FURL PLS
                     if record['curie'] is not None:
                         curie = record['curie']
                         new_cs, new_syns = self.get_equiv_classes(curie)
-                        return new_cs, new_syns, (curie, record['labels'][0])
+                        return new_cs, new_syns, (curie, record['labels'][0] if record['labels'] else None)
                 else:  # CURIE preference ordering if there are multiples at the same lvl
                     # cscore will be by max number of matching equiv curies (min is 1)
                     # that is 1 then we fail over to total equiv curies
@@ -384,7 +387,7 @@ class term_service():  # FURL PLS
                 if len(record_list) == 1:
                     record = record_list[0]
                     curie = record['curie']
-                    label = record['labels'][0]
+                    label = record['labels'][0] if record['labels'] else None
                     if curie != putative_term.replace('_',':'):  # matches both _ and : versions
                         raise TypeError('%s != %s' % (curie, putative_term))
                     curies, syns = self.get_equiv_classes(curie)
