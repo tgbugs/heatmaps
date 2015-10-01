@@ -424,6 +424,8 @@ class term_service():  # FURL PLS
 ###
 
 class sortstuff:
+    """ Class to hold all sort methods.
+        The key function should accept a tuple (id_, name) as an argument."""
     def __init__(self):
         # build a list of valid sort types from methods to populate the menus automatically
         self.sorts = [n for n in dir(self) if not n.startswith('_') and n != 'get_sort' and n != 'sort']
@@ -460,8 +462,8 @@ class sortstuff:
         print(sort_name, idSortKey, ascending, sortDim)
         id_sort, id_key = self.get_sort(sort_name, heatmap_data, idSortKey, ascending, sortDim)
         print(id_sort)
-        id_order, name_order = [c for c in zip(*id_sort([(id_, name)
-                                            for id_, name in id_name_dict.items()], key=id_key))]
+        id_order, name_order = [c for c in zip(*id_sort([(id_, name)  # format expected for key functions
+                                for id_, name in id_name_dict.items()], key=id_key))]
         return id_order, name_order
 
     def get_sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim):
@@ -522,6 +524,14 @@ class sortstuff:
         else:
             key = lambda x: ascending * len([v for v in heatmap_data[x[0]].values() if v > 0])
         return self.sorted, key
+
+    def name_length(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort based on the number of characters in the name
+            of the term or source."""
+        ascending = self._asc(ascending)
+        key = lambda x: ascending * len(x[1])
+        return self.sorted, key
+
 
     @idSortSame
     def jaccard(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
