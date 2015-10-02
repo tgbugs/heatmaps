@@ -32,7 +32,7 @@ class hmStats:
         term_order.remove(TOTAL_TERM_ID)
         src_idn = {s:s for s in totals}
         src_order, _ = ss.sort('frequency', self.heatmap_data, None, False, 1, src_idn)
-        src_order = sorted(totals)
+        #src_order = sorted(totals)
 
         term_stats = []
         # construct a matrix of terms x stats
@@ -55,11 +55,11 @@ class hmStats:
             stats.append(freq)
             stats.append(len(term))
 
-            term_stats.append(stats)
+            term_stats.append(stats)#[::-1])
 
         stats_matrix = np.array(term_stats)
-        stats_order = ['total', 'freq', 'term length']
-        stats_order.extend(src_order)
+        stats_order = list(src_order)
+        stats_order.extend(['total', 'freq', 'term length'])
         #print(stats_order)
         nstats = stats_matrix.shape[1]
 
