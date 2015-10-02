@@ -424,7 +424,7 @@ class term_service():  # FURL PLS
 ###
 
 class sortstuff:
-    """ Class to hold all sort methods.
+    """ Class to hold all sort methods. NOTE: sortDim 0 -> terms, 1 -> src
         The key function should accept a tuple (id_, name) as an argument."""
     def __init__(self):
         # build a list of valid sort types from methods to populate the menus automatically
