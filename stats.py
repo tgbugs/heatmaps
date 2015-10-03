@@ -7,8 +7,10 @@ import numpy as np
 import pylab as plt
 from IPython import embed
 from heatmaps.services import LITERATURE_ID, TOTAL_TERM_ID, sortstuff
+from heatmaps.scigraph_client import Graph
 
 ss = sortstuff()
+graph = Graph()
 
 class hmStats:
     attrs = [
@@ -51,15 +53,28 @@ class hmStats:
                 else:
                     stats.append(0)
 
+            _, curie, _, syns = ss.term_server.term_id_expansion(term)
+
+            if curie:
+                curie = curie.replace('#', '%23')
+                result = graph.getNeighbors(curie, depth=1, direction='BOTH')
+                if not result:
+                    print(term, curie)
+                edges = result['edges']
+            else:
+                edges = []
+            
             stats.append(total)
             stats.append(freq)
             stats.append(len(term))
+            stats.append(len(syns))
+            stats.append(len(edges))
 
             term_stats.append(stats)#[::-1])
 
         stats_matrix = np.array(term_stats)
         stats_order = list(src_order)
-        stats_order.extend(['total', 'freq', 'term length'])
+        stats_order.extend(['total', 'freq', 'term length', 'nsyns', 'nedges'])
         #print(stats_order)
         nstats = stats_matrix.shape[1]
 
