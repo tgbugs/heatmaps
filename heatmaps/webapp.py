@@ -20,7 +20,7 @@ if environ.get('HEATMAP_PROD',None):
 else:
     from IPython import embed  #FIXME
 
-from .services import heatmap_service, summary_service, term_service
+from .services import heatmap_service, summary_service
 
 ###
 #   Templates (FIXME extract)
@@ -115,7 +115,7 @@ class Select(Templated):
         super().__init__(render_kwargs)
 
 
-hmserv = heatmap_service(summary_service(), term_service())  # mmm nasty singletons
+hmserv = heatmap_service(summary_service())  # mmm nasty singletons
 
 hmapp = Flask("heatmap service")
 
