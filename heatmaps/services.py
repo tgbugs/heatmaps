@@ -104,6 +104,14 @@ def idSortOther(function):
     function.__sort_other__ = True
     return function
 
+def termsOnly(function):
+    function.__terms_only__ = True
+    return function
+
+def srcsOnly(function):
+    function.__srcs_only__ = True
+    return function
+
 def sanitize_input(function):
     """ Right now this is just a reminder function to flag functions that
         need to have their input sanitized since they are inserted into the sql
@@ -199,6 +207,7 @@ class term_service():  # FURL PLS
 
     def __init__(self):
         self.known_curies = vocab.getCuriePrefixes()
+        self.expansion_cache = {}  # TODO see if we actually need to gc this periodically
 
     def terms_preprocessing(self, terms):
 
@@ -291,6 +300,17 @@ class term_service():  # FURL PLS
                     # careful with curies that are None, need to fix that in nifstd :/
                     curies_labels = [t for t in sorted([(r['curie'], r['labels'][0])
                                                         for r in records if r['curie'] is not None])]
+                    bad_symbols = ('/','#')
+                    i = 0
+                    stop = len(curies_labels)
+                    while i < stop:
+                        for symbol in bad_symbols:
+                            if symbol in curies_labels[i][0]:
+                                curies_labels.append(curies_labels.pop(i))
+                                stop -= 1
+                                break  # inner break
+                        i += 1
+
                     """  # if you need this code you are probably missing a curie somewhere
                     for r in records:
                         c = r['curie']
@@ -370,6 +390,9 @@ class term_service():  # FURL PLS
         if type(putative_term) is not str:
             raise TypeError('putative term is not a string! %s' % str(putative_term))
 
+        if putative_term in self.expansion_cache:
+            return self.expansion_cache[putative_term]
+
         # curie or fragment
         if putative_term.split(':')[0] in self.known_curies or putative_term.split('_')[0] in self.known_curies:
             curie = putative_term.replace('_', ':')
@@ -407,9 +430,10 @@ class term_service():  # FURL PLS
         # guess agressively that terms with '_' in them are identifiers
         # same goes for things that look like curies
 
-        query = ' AND '.join(syns)
-
-        return putative_term, curie, label, query
+        #query = ' AND '.join(syns)
+        output = putative_term, curie, label, syns
+        self.expansion_cache[putative_term] = output
+        return output
 
     def get_name(self, tid):
         # try to convert fragments into CURIE form
@@ -418,6 +442,9 @@ class term_service():  # FURL PLS
             return None
         json_data = vocab.findById(tid)  # FIXME cache this stuff?
         return json_data['labels'][0] if json_data else None
+
+
+TERM_SERVER = term_service()  # sillyness but nice for caching
 
 ###
 #   Sorting!
@@ -428,9 +455,37 @@ class sortstuff:
         The key function should accept a tuple (id_, name) as an argument."""
     def __init__(self):
         # build a list of valid sort types from methods to populate the menus automatically
-        self.sorts = [n for n in dir(self) if not n.startswith('_') and n != 'get_sort' and n != 'sort']
-        self.same = [n for n in dir(self) if hasattr(getattr(self, n), '__sort_same__')]
-        self.other = [n for n in dir(self) if hasattr(getattr(self, n), '__sort_other__')]
+        sorts = []
+        sort_terms = []
+        sort_srcs = []
+        same = []
+        other = []
+        for name in dir(self):
+            if not name.startswith('_') and name != 'get_sort' and name != 'sort':
+                if hasattr(getattr(self, name), '__terms_only__'):
+                   sort_terms.append(name)
+                elif hasattr(getattr(self, name), '__srcs_only__'):
+                   sort_srcs.append(name)
+                else:
+                    sorts.append(name)
+                    sort_terms.append(name)
+                    sort_srcs.append(name)
+
+                if hasattr(getattr(self, name), '__sort_same__'):
+                    same.append(name)
+
+                if hasattr(getattr(self, name), '__sort_other__'):
+                    other.append(name)
+
+        self.sorts = sorts
+        self.sort_terms = sort_terms
+        self.sort_srcs = sort_srcs
+        self.same = same
+        self.other = other
+
+        #bind term server
+        self.term_server = TERM_SERVER
+
         # first pass alpha to avoid unstable sort issues
         self.sorted = lambda collection, key: sorted(sorted(collection), key=key)
         self._make_docs()
@@ -607,6 +662,41 @@ class sortstuff:
 
         return self.sorted, key
 
+    @termsOnly
+    def number_synonyms(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        ascending = self._asc(ascending)
+        
+        term_syn_dict = {}
+        for term in heatmap_data:
+            putative_term, curie, label, syns = self.term_server.term_id_expansion(term)
+            term_syn_dict[term] = ascending * len(syns)
+
+        print(term_syn_dict)
+
+        def key(x):
+            return term_syn_dict[x[0]]
+
+        return self.sorted, key
+
+    @termsOnly
+    def number_edges(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        ascending = self._asc(ascending)
+        term_edge_dict = {}
+        for term in heatmap_data:
+            putative_term, curie, label, syns = self.term_server.term_id_expansion(term)
+            if curie:
+                curie = curie.replace('#', '%23')  # FIXME FIXME this needs to be implemented in the scigraph client directly and/or fixed in the ontology or scigraph
+                result = graph.getNeighbors(curie, depth=1, direction='BOTH')
+                edges = result['edges']
+                term_edge_dict[term] = ascending * len(edges)
+            else:
+                term_edge_dict[term] = 0
+            
+        def key(x):
+            return term_edge_dict[x[0]]
+        
+        return self.sorted, key
+
 ###
 #   Stick the collected data in a datastore (postgres)
 ###
@@ -682,10 +772,10 @@ class heatmap_service(database_service):
     collTerms = None,
     collSources = None, 'collapse views to sources',
 
-    def __init__(self, summary_server, term_server):
+    def __init__(self, summary_server):
         super().__init__()
         self.summary_server = summary_server
-        self.term_server = term_server
+        self.term_server = TERM_SERVER
         self.term_count_dict = {TOTAL_TERM_ID:{}}  # makes init play nice
         self.term_names = {TOTAL_TERM_ID:TOTAL_TERM_ID_NAME}  #FIXME these dicts may need to be ordered so we don't use too much memory
         self.heatmap_term_order = {}  # temp store of the original order
@@ -703,7 +793,8 @@ class heatmap_service(database_service):
         # this seems a bad way to pass stuff out to the webapp?
         ss = sortstuff()
         self.sort_docs = ss.docs
-        self.sorts = ss.sorts
+        self.sort_terms = ss.sort_terms
+        self.sort_srcs = ss.sort_srcs
         self.sort_same = ss.same
         self.sort_other = ss.other
         self.sort = ss.sort
@@ -1036,8 +1127,11 @@ class heatmap_service(database_service):
         heatmap_data = self.get_heatmap_data_from_id(hm_id)
 
 
-        tuples = [[v if v is not None else '' for v in self.term_server.term_id_expansion(term)]
+        tuples = [[v if v is not None else '' for v in self.term_server.term_id_expansion(term)]  # FIXME this called 2x
                   for term in heatmap_data]
+        for tup in tuples:
+            tup[-1] = str(tup[-1])  # convert syns -> query
+
         num_matches = len([t for t in tuples if t[1]])
         cols = [c for c in zip(*tuples)]
         justs = [max([len(s) for s in col]) + 1 for col in cols]
@@ -1073,8 +1167,8 @@ class heatmap_service(database_service):
         select_mapping = {  # store this until... when?
                         'collTerms':(self.collTerms, ),
                         'collSources':(self.collSources, ),
-                        'sortTerms':(self.sorts, ),
-                        'sortSources':(self.sorts, ),
+                        'sortTerms':(self.sort_terms, ),
+                        'sortSources':(self.sort_srcs, ),
                         'idSortTerms':(src_ids, src_names),
                         'idSortSources':(sorted(heatmap_data, key=lambda x: x.lower()), ),
                         'idRefTerms':(sorted(heatmap_data, key=lambda x: x.lower()), ),
