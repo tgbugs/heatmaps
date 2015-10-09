@@ -122,84 +122,6 @@ def sanitize_input(function):
     return wrapped
 
 ###
-#   Retrieve summary per term
-###
-
-class summary_service:  # FIXME implement as a service/coro? with asyncio?
-    old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.json?q=%s"
-    url = "http://beta.neuinfo.org/services/v1/summary.json?q=%s"
-    url, old_url = old_url, url
-    _timeout = 20
-
-    missing_ids = 'nif-0000-21197-1', 'nif-0000-00053-2'
-
-    def get(self, url):
-        return requests.get(url, timeout=self._timeout).json()
-
-    def get_sources(self):
-        """
-            get the complete list of data sources
-            the structure for each nifid is as follows:
-
-            (database name, indexable)
-            a dict of nifid_count_total is also returned matching the format
-            of other nifid_count dictionaires, this one is considered to be
-            the "difninitive" record of the number of sources
-
-            check results against cm, but be aware that 
-        """
-        query_url = self.url % '*'
-        json_data = self.get(query_url)
-
-        datasources = json_data['result']['federationSummary']['results']
-        lit_count = json_data['result']['literatureSummary']['resultCount']
-
-        nifid_count_total = {d['nifId']:d['count'] for d in datasources}
-        resource_data_dict = {d['nifId']:(d['db'], d['indexable']) for d in datasources}
-
-        resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature')
-        nifid_count_total[LITERATURE_ID] = lit_count
-
-        # For compatibility we include the 'old' data as well since stuff doesn't overlap :/
-        # man I hope we never get rid of a view :/
-        old_query_url = self.old_url % '*'
-        old_json = self.get(old_query_url)
-        old_datasources = old_json['result']['federationSummary']['results']
-        old_resource_data_dict = {d['nifId']:(d['db'], d['indexable']) for d in old_datasources}
-
-        resource_data_dict.update(old_resource_data_dict)  # make sure we have the union of all sources
-
-        # TODO once this source data has been retrieved we should really
-        # go ahead and make sure the database is up to date
-        # this needs to be put elsewhere though
-        return resource_data_dict, nifid_count_total
-
-    def get_counts(self, term):  #FIXME this really needs to be async or something
-        # FIXME we need anaomoly detection here! if we are suddenly getting back no results!
-        """
-            given a term return a dict of counts for each unique src_nifid
-
-            IDS ARE NOT HANDLED HERE
-            TERM MUNGING NOT HERE EITHER
-        """
-        if ' '  in term:  # we need to do this here, users shouldn't see this
-            term = '"%s"' % term
-        query_url = self.url % term  # any preprocessing of the term BEFORE here
-
-        print('summary query url:', query_url)
-        json = self.get(query_url)
-        datasources = json['result']['federationSummary']['results']
-        lit_count = json['result']['literatureSummary']['resultCount']
-        nifid_count = {d['nifId']:d['count'] for d in datasources}
-        nifid_count[LITERATURE_ID] = lit_count
-        query =  json['query']  # includes expansions etc
-
-        #TODO we need to gather all the metadata about the expansion used
-
-        return nifid_count
-
-
-###
 #   Map terms to ids  FIXME we need some way to resolve multiple mappings to ids ;_;
 ###
 
@@ -221,9 +143,10 @@ class term_service():  # FURL PLS
             term = term.strip().rstrip().strip('"').strip().rstrip()  # insurance
             cleaned_terms.append(term)
             if ':' in term and ' ' not in term:
-                reason = ('Colon detected in term without a space. '
-                'Please remove the colon, it will cause a parse error')
-                bad_terms.append((term, reason))
+                if term.split(':')[0] not in self.known_curies:
+                    reason = ('Colon detected in term without a space. '
+                    'Please remove the colon, it will cause a parse error')
+                    bad_terms.append((term, reason))
             elif '&' in term:
                 reason = ('Ampresand detect in term. '
                 'Please remove the ampresand, it will cause a parse error.')
@@ -445,6 +368,84 @@ class term_service():  # FURL PLS
 
 
 TERM_SERVER = term_service()  # sillyness but nice for caching
+
+###
+#   Retrieve summary per term
+###
+
+class summary_service:  # FIXME implement as a service/coro? with asyncio?
+    old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.json?q=%s"
+    url = "http://beta.neuinfo.org/services/v1/summary.json?q=%s"
+    url, old_url = old_url, url
+    _timeout = 20
+
+    missing_ids = 'nif-0000-21197-1', 'nif-0000-00053-2'
+
+    def get(self, url):
+        return requests.get(url, timeout=self._timeout).json()
+
+    def get_sources(self):
+        """
+            get the complete list of data sources
+            the structure for each nifid is as follows:
+
+            (database name, indexable)
+            a dict of nifid_count_total is also returned matching the format
+            of other nifid_count dictionaires, this one is considered to be
+            the "difninitive" record of the number of sources
+
+            check results against cm, but be aware that 
+        """
+        query_url = self.url % '*'
+        json_data = self.get(query_url)
+
+        datasources = json_data['result']['federationSummary']['results']
+        lit_count = json_data['result']['literatureSummary']['resultCount']
+
+        nifid_count_total = {d['nifId']:d['count'] for d in datasources}
+        resource_data_dict = {d['nifId']:(d['db'], d['indexable']) for d in datasources}
+
+        resource_data_dict[LITERATURE_ID] = ('Literature', 'Literature')
+        nifid_count_total[LITERATURE_ID] = lit_count
+
+        # For compatibility we include the 'old' data as well since stuff doesn't overlap :/
+        # man I hope we never get rid of a view :/
+        old_query_url = self.old_url % '*'
+        old_json = self.get(old_query_url)
+        old_datasources = old_json['result']['federationSummary']['results']
+        old_resource_data_dict = {d['nifId']:(d['db'], d['indexable']) for d in old_datasources}
+
+        resource_data_dict.update(old_resource_data_dict)  # make sure we have the union of all sources
+
+        # TODO once this source data has been retrieved we should really
+        # go ahead and make sure the database is up to date
+        # this needs to be put elsewhere though
+        return resource_data_dict, nifid_count_total
+
+    def get_counts(self, term):  #FIXME this really needs to be async or something
+        # FIXME we need anaomoly detection here! if we are suddenly getting back no results!
+        """
+            given a term return a dict of counts for each unique src_nifid
+
+            IDS ARE NOT HANDLED HERE
+            TERM MUNGING NOT HERE EITHER
+        """
+        if ' '  in term:  # we need to do this here, users shouldn't see this
+            term = '"%s"' % term
+        query_url = self.url % term  # any preprocessing of the term BEFORE here
+
+        print('summary query url:', query_url)
+        json = self.get(query_url)
+        datasources = json['result']['federationSummary']['results']
+        lit_count = json['result']['literatureSummary']['resultCount']
+        nifid_count = {d['nifId']:d['count'] for d in datasources}
+        nifid_count[LITERATURE_ID] = lit_count
+        query =  json['query']  # includes expansions etc
+
+        #TODO we need to gather all the metadata about the expansion used
+
+        return nifid_count
+
 
 ###
 #   Sorting!
