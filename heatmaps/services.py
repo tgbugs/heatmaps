@@ -130,6 +130,7 @@ class term_service():  # FURL PLS
     def __init__(self):
         self.known_curies = vocab.getCuriePrefixes()
         self.expansion_cache = {}  # TODO see if we actually need to gc this periodically
+        self.curie_map = {}  # for the time being we will construct this a term at a time
 
     def terms_preprocessing(self, terms):
 
@@ -153,6 +154,25 @@ class term_service():  # FURL PLS
                 bad_terms.append((term, reason))
 
         return cleaned_terms, bad_terms
+
+    def get_fragment(self, curie):
+        prefix, id_ = curie.split(':')
+        if prefix not in self.known_curies:
+            # this should never happen: preprocessing should have caught it
+            raise TypeError('curie has unknown prefix! %s' % prefix)
+
+        iri = self.curie_map.get(prefix, None)
+
+        if not iri:
+            iri = vocab.findById(curie)['iri'].rstrip(id_)
+            self.curie_map[prefix] = iri
+            #iri = record['iri'].rstrip(id_)
+
+        if iri.endswith('#'):
+            return id_
+
+        prefrag = iri.rsplit('/',1)[-1]
+        return prefrag + id_
 
     def get_equiv_classes(self, curie):
         if curie is None:
@@ -432,6 +452,9 @@ class summary_service:  # FIXME implement as a service/coro? with asyncio?
         """
         if ' '  in term:  # we need to do this here, users shouldn't see this
             term = '"%s"' % term
+        elif ':' in term:  # this should only happen if it passed the curie test before
+            term = TERM_SERVER.get_fragment(term)
+
         query_url = self.url % term  # any preprocessing of the term BEFORE here
 
         print('summary query url:', query_url)
