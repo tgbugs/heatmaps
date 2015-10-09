@@ -338,9 +338,12 @@ class term_service():  # FURL PLS
 
         # curie or fragment
         if putative_term.split(':')[0] in self.known_curies or putative_term.split('_')[0] in self.known_curies:
-            curie = putative_term.replace('_', ':')
             # this sucks esp hard when we have birnlex_xxxxxxx prefixed identifiers used with
             # 20 different iri prefixes :/
+            if ':' not in putative_term:
+                curie = putative_term.replace('_', ':')
+            else:
+                curie = putative_term
             record_list = vocab.findById(curie)  # assume its a curie and try
             if type(record_list) is dict:  # heh, stupid hack
                 record_list = [record_list]
@@ -354,7 +357,7 @@ class term_service():  # FURL PLS
                     record = record_list[0]
                     curie = record['curie']
                     label = record['labels'][0] if record['labels'] else None
-                    if curie != putative_term.replace('_',':'):  # matches both _ and : versions
+                    if ':' not in curie and curie != putative_term.replace('_',':'):  # matches both _ and : versions
                         raise TypeError('%s != %s' % (curie, putative_term))
                     curies, syns = self.get_equiv_classes(curie)
                 else:
