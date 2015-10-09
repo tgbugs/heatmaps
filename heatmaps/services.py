@@ -1034,19 +1034,22 @@ class heatmap_service(database_service):
         if len(th_ids) == len(terms):  #all terms identical get existing id
             sql_hp_ids = ("SELECT DISTINCT heatmap_prov_id FROM"
             " heatmap_prov_to_term_history WHERE term_history_id IN %s")
-            sql = ("SELECT DISTINCT heatmap_prov_id, term_history_id FROM"
-            " heatmap_prov_to_term_history WHERE term_history_id IN %s")
             args = (tuple(th_ids),)
             existing_hm_ids = self.cursor_exec(sql_hp_ids, args)
-            existing_th_ids = self.cursor_exec(sql, args)
 
-            # we need hit the newest hm_ids first in case 
-            for (existing_hm_id,) in existing_hm_ids:
-                old_th_ids = [ti for hi, ti in existing_th_ids if hi == existing_hm_id]
-                if set(th_ids) == set(old_th_ids): #rows exist under a SINGLE heatmap
-                    sql = "SELECT DateTime FROM heatmap_prov WHERE id=%s" 
+            sql = ("SELECT term_history_id FROM"
+            " heatmap_prov_to_term_history WHERE heatmap_prov_id = %s")
+            # we need hit the newest hm_ids first
+            for (existing_hm_id,) in sorted(existing_hm_ids)[::-1]:
+                print(existing_hm_id)
+                args = (existing_hm_id,)
+                all_old_th_ids = self.cursor_exec(sql, args)
+                # unpack the tuple so it will match
+                all_old_th_ids = [t[0] for t in all_old_th_ids]
+                if set(th_ids) == set(all_old_th_ids):
+                    sql_get_dt = "SELECT DateTime FROM heatmap_prov WHERE id=%s" 
                     args = (existing_hm_id,)
-                    timestamp = self.cursor_exec(sql, args)
+                    timestamp = self.cursor_exec(sql_get_dt, args)
                     return hm_data, existing_hm_id, timestamp
 
         #create a new record in heatmap_prov since we didn't find an existing record
