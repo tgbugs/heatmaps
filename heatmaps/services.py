@@ -23,7 +23,7 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
-from .visualization import applyCollapse, dict_to_matrix, sCollapseToSrcId, make_png
+from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png
 from .scigraph_client import Graph, Vocabulary
 
 
@@ -797,7 +797,7 @@ class heatmap_service(database_service):
                  'png':'image/png'}
 
     collTerms = None,
-    collSources = None, 'collapse views to sources',
+    collSources = None, 'collapse views to sources', 'collapse names to sources'
 
     def __init__(self, summary_server):
         super().__init__()
@@ -1119,7 +1119,7 @@ class heatmap_service(database_service):
         # remove the total term name from the name order list
         assert term_name_order.pop(term_id_order.index(TOTAL_TERM_ID)) == TOTAL_TERM_ID_NAME, "WHOOPS"
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
-        limit = 1500
+        limit = 1000
         if len(matrix) > limit:
             #return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
             matrix = matrix[:limit]
@@ -1134,7 +1134,7 @@ class heatmap_service(database_service):
         row_names = term_name_order
         col_names = src_name_order
         destdir = '/tmp/'
-        future = self.ppe.submit(make_png, matrix, row_names, col_names, title, destdir, async=True)
+        future = self.ppe.submit(make_png, matrix, row_names, col_names, title, destdir, poster=False, async=True)
         future.result()
         with open(destdir + '%s.png'%title, 'rb') as f:
             png = f.read()
@@ -1255,6 +1255,9 @@ class heatmap_service(database_service):
             src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
         elif collSources == 'collapse views to sources':
             src_coll_function = sCollapseToSrcId
+            src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+        elif collSources == 'collapse names to sources':
+            src_coll_function = sCollapseToSrcName
             src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         else:
             src_coll_function = None

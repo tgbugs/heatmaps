@@ -17,10 +17,27 @@ def discretize(data_matrix):
 
     return data_matrix
 
+def sCollapseToSrcName(keys, id_name_dict):
+    """
+        Collapse sources that have the same name.
+    """
+    
+    key_collections_dict = defaultdict(set)
+    new_id_name_dict = {}
+    for key in keys:
+        name = id_name_dict[key]
+        key_collections_dict[name].add(key)
+        if name not in new_id_name_dict:
+            new_id_name_dict[name] = name
+        elif new_id_name_dict[name] != name:
+            raise NameError('Source names do not match! %s %s' %
+                            (new_id_name_dict[parent_key], id_name_dict[key]))
+
+    return dict(key_collections_dict), new_id_name_dict
 
 def sCollapseToSrcId(keys, id_name_dict):
     """
-        Collapse sources that have the same name, really base identifier
+        Collapse sources that have the same base view identifier
         but that mapping is a bit harder since I'd need to map the base id to 
         the name they have in common... maybe that is better?
     """
