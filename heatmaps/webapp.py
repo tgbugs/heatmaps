@@ -255,6 +255,23 @@ def hm_viz(hm_id):
     else:
         idSortSources = None
 
+    if False: # requests.form['sortType'] == 'double':
+        sortTerms = request.form['sortTerms']
+        if sortTerms in hmserv.sort_other:
+            idSortTerms = request.form['idSortTerms']
+        elif sortTerms in hmserv.sort_same:
+            idSortTerms = request.form['idRefTerms']
+        else:
+            idSortTerms = None
+
+        sortSources = request.form['sortSources']
+        if sortSources in hmserv.sort_other:
+            idSortSources = request.form['idSortSources']
+        elif sortSources in hmserv.sort_same:
+            idSortSources = request.form['idRefSources']
+        else:
+            idSortSources = None
+
     args = (hm_id,
             request.form['filetypes'],
             request.form['collTerms'],
@@ -299,8 +316,8 @@ def hm_explore(hm_id):
     window.onload = function (){jso}
     document.getElementById("sortTerms").addEventListener("change", showTerms, false)
     document.getElementById("sortSources").addEventListener("change", showSources, false)
-    document.getElementById("sortTerms").addEventListener("change", showTerms2, false)
-    document.getElementById("sortSources").addEventListener("change", showSources2, false)
+    document.getElementById("sortTerms2").addEventListener("change", showTerms2, false)
+    document.getElementById("sortSources2").addEventListener("change", showSources2, false)
     {jsc}
     </script>"""
     js1 = """    <script>
@@ -354,13 +371,10 @@ def hm_explore(hm_id):
     {jsc}
     </script>"""
 
-    rep = ['idSortOps', 'idRefOps', 'anysort', '_any', '_iss', '_irs', '_ist', '_irt', '{iss', '{irs', '{ist', '{irt', 'showTerms', 'showSources', 'idSort', 'idRef']
+    rep = ['anysort', '_any', '_iss', '_irs', '_ist', '_irt', '{iss', '{irs', '{ist', '{irt', 'showTerms', 'showSources', 'var idSort', 'var idRef']
     js2 = js1
     for name in rep:
         js2 = js2.replace(name, name + '2')
-
-    js2 = js2.replace('idSort2Ops2', 'idSortOps2')
-    js2 = js2.replace('idRef2Ops2', 'idRefOps2')
 
     base = '\n'.join((
         '<!doctype html>',  # FIXME ICK
@@ -376,6 +390,10 @@ def hm_explore(hm_id):
             '{collTerms}',
             '{collSources} <br>',
             '<h3>Sorting Options:</h3>',
+            '{sortTypes} <br><br>',
+
+
+            '<h3>Primary sort:</h3>',
             '{sortTerms}',
             '{sortSources} <br>',
 
@@ -396,6 +414,10 @@ def hm_explore(hm_id):
                 '</div>',
                 '<br>',
             '</div>',
+
+            '<h3>Secondary sort:</h3>',
+            '{sortTerms2}',
+            '{sortSources2} <br>',
 
             '<div id={anysort2} style="display:none;">',  # FIXME may want to default away from display:none and add it if we have js?
             '<h3>Second reference value or identifier to sort against:</h3>',

@@ -104,10 +104,6 @@ def idSortOther(function):
     function.__sort_other__ = True
     return function
 
-def idSortOther2(function):
-    function.__sort_other2__ = True
-    return function
-
 def termsOnly(function):
     function.__terms_only__ = True
     return function
@@ -491,9 +487,8 @@ class sortstuff:
         sort_srcs = []
         same = []
         other = []
-        other2 = []
         for name in dir(self):
-            if not name.startswith('_') and name != 'get_sort' and name != 'sort':
+            if not name.startswith('_') and name != 'get_sort' and name != 'sort' and name != 'double_sort':
                 if hasattr(getattr(self, name), '__terms_only__'):
                    sort_terms.append(name)
                 elif hasattr(getattr(self, name), '__srcs_only__'):
@@ -509,16 +504,12 @@ class sortstuff:
                 if hasattr(getattr(self, name), '__sort_other__'):
                     other.append(name)
 
-                if hasattr(getattr(self, name), '__sort_other2__'):
-                    other.append(name)  # all the require 2 also require 1
-                    other2.append(name)
-
+        self.sort_types = ['single', 'double']
         self.sorts = sorts
         self.sort_terms = sort_terms
         self.sort_srcs = sort_srcs
         self.same = same
         self.other = other
-        self.other2 = other2
 
         #bind term server
         self.term_server = TERM_SERVER
@@ -551,11 +542,32 @@ class sortstuff:
         return inverted
 
     def sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim, id_name_dict):
+        """ This method is the only thing that should be called from other code. """
         print(sort_name, idSortKey, ascending, sortDim)
         id_sort, id_key = self.get_sort(sort_name, heatmap_data, idSortKey, ascending, sortDim)
         print(id_sort)
         id_order, name_order = [c for c in zip(*id_sort([(id_, name)  # format expected for key functions
                                 for id_, name in id_name_dict.items()], key=id_key))]
+        return id_order, name_order
+
+    def double_sort(self, sort_name1, sort_name2, heatmap_data, idSortKey1, idSortKey2, ascending, sortDim, id_name_dict):
+        """ This one may also be called externally. Should implement a rank-diff sort. """
+        ido1, no1 = self.sort(sort_name1, heatmap_data, idSortKey1, ascending, sortDim, id_name_dict)
+        ido2, no2 = self.sort(sort_name2, heatmap_data, idSortKey2, ascending, sortDim, id_name_dict)
+
+        id_sort = self.sorted
+        id_key = lambda x: ido1.index(x[0]) - ido2.index(x[0])
+
+        id_order, name_order = [c for c in zip(*id_sort([(id_, name)  # format expected for key functions
+                                for id_, name in id_name_dict.items()], key=id_key))]
+
+        return 
+        id_sort1, id_key1 = self.get_sort(sort_name1, heatmap_data, idSortKey1, ascending, sortDim)
+        id_sort2, id_key2 = self.get_sort(sort_name2, heatmap_data, idSortKey2, ascending, sortDim)
+
+        new_key = lambda x: id_key1(x) - id_key2(x)  # FIXME this only works when all sort methods reduce to a numerical rank
+        id_name_order = self.sorted([(id_, name) for id_, name in id_name_dict.items()], key=new_key)
+        id_order, name_order = [c for c in zip(*out)]
         return id_order, name_order
 
     def get_sort(self, sort_name, heatmap_data, idSortKey, ascending, sortDim):
@@ -583,12 +595,6 @@ class sortstuff:
 
         key = lambda x: x[1]
         return sorted_, key
-
-    @idSortOther2  #FIXME this doesnt sort on 2 data columns, its sorts on 2 different sortings :/
-    def rank_diff(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
-        """ Sort the values on an axis based by the difference in their rankings
-            between the two indexes identified by idSortKey
-            (where key is Term or Source) on the other axis."""
 
     @idSortOther
     def identifier(self, heatmap_data, idSortKey, ascending=True, sortDim=0):  # TODO
@@ -836,12 +842,11 @@ class heatmap_service(database_service):
         # this seems a bad way to pass stuff out to the webapp?
         ss = sortstuff()
         self.sort_docs = ss.docs
+        self.sort_types = ss.sort_types
         self.sort_terms = ss.sort_terms
         self.sort_srcs = ss.sort_srcs
         self.sort_same = ss.same
-        self.sort_same2 = []  # TODO
         self.sort_other = ss.other
-        self.sort_other2 = ss.other2
         self.sort = ss.sort
 
     def check_counts(self):
@@ -1212,8 +1217,6 @@ class heatmap_service(database_service):
             'irs2':'name10',
             'idSortOps':str(self.sort_other).replace("'",'"'),
             'idRefOps':str(self.sort_same).replace("'",'"'),
-            'idSortOps2':str(self.sort_other2).replace("'",'"'),
-            'idRefOps2':str(self.sort_same2).replace("'",'"'),
         }
 
         srcs = sorted([(k, ' '.join(v)) for k, v in self.resources.items()], key=lambda a: a[1].lower())
@@ -1222,8 +1225,11 @@ class heatmap_service(database_service):
         select_mapping = {  # store this until... when?
                         'collTerms':(self.collTerms, ),
                         'collSources':(self.collSources, ),
+                        'sortTypes':(self.sort_types, ),
                         'sortTerms':(self.sort_terms, ),
                         'sortSources':(self.sort_srcs, ),
+                        'sortTerms2':(self.sort_terms, ),
+                        'sortSources2':(self.sort_srcs, ),
                         'idSortTerms':(src_ids, src_names),
                         'idSortSources':(sorted(heatmap_data, key=lambda x: x.lower()), ),
                         'idRefTerms':(sorted(heatmap_data, key=lambda x: x.lower()), ),
