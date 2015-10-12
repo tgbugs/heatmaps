@@ -104,6 +104,10 @@ def idSortOther(function):
     function.__sort_other__ = True
     return function
 
+def idSortOther2(function):
+    function.__sort_other2__ = True
+    return function
+
 def termsOnly(function):
     function.__terms_only__ = True
     return function
@@ -487,6 +491,7 @@ class sortstuff:
         sort_srcs = []
         same = []
         other = []
+        other2 = []
         for name in dir(self):
             if not name.startswith('_') and name != 'get_sort' and name != 'sort':
                 if hasattr(getattr(self, name), '__terms_only__'):
@@ -504,11 +509,16 @@ class sortstuff:
                 if hasattr(getattr(self, name), '__sort_other__'):
                     other.append(name)
 
+                if hasattr(getattr(self, name), '__sort_other2__'):
+                    other.append(name)  # all the require 2 also require 1
+                    other2.append(name)
+
         self.sorts = sorts
         self.sort_terms = sort_terms
         self.sort_srcs = sort_srcs
         self.same = same
         self.other = other
+        self.other2 = other2
 
         #bind term server
         self.term_server = TERM_SERVER
@@ -573,6 +583,12 @@ class sortstuff:
 
         key = lambda x: x[1]
         return sorted_, key
+
+    @idSortOther2  #FIXME this doesnt sort on 2 data columns, its sorts on 2 different sortings :/
+    def rank_diff(self, heatmap_data, idSortKey, ascending=True, sortDim=0):
+        """ Sort the values on an axis based by the difference in their rankings
+            between the two indexes identified by idSortKey
+            (where key is Term or Source) on the other axis."""
 
     @idSortOther
     def identifier(self, heatmap_data, idSortKey, ascending=True, sortDim=0):  # TODO
@@ -823,7 +839,9 @@ class heatmap_service(database_service):
         self.sort_terms = ss.sort_terms
         self.sort_srcs = ss.sort_srcs
         self.sort_same = ss.same
+        self.sort_same2 = []  # TODO
         self.sort_other = ss.other
+        self.sort_other2 = ss.other2
         self.sort = ss.sort
 
     def check_counts(self):
@@ -1187,8 +1205,15 @@ class heatmap_service(database_service):
             'irt':'name3',
             'iss':'name4',
             'irs':'name5',
+            'anysort2':'name6', # FIXME better naming here?
+            'ist2':'name7',
+            'irt2':'name8',
+            'iss2':'name9',
+            'irs2':'name10',
             'idSortOps':str(self.sort_other).replace("'",'"'),
             'idRefOps':str(self.sort_same).replace("'",'"'),
+            'idSortOps2':str(self.sort_other2).replace("'",'"'),
+            'idRefOps2':str(self.sort_same2).replace("'",'"'),
         }
 
         srcs = sorted([(k, ' '.join(v)) for k, v in self.resources.items()], key=lambda a: a[1].lower())
@@ -1203,6 +1228,10 @@ class heatmap_service(database_service):
                         'idSortSources':(sorted(heatmap_data, key=lambda x: x.lower()), ),
                         'idRefTerms':(sorted(heatmap_data, key=lambda x: x.lower()), ),
                         'idRefSources':(src_ids, src_names),
+                        'idSortTerms2':(src_ids, src_names),
+                        'idSortSources2':(sorted(heatmap_data, key=lambda x: x.lower()), ),
+                        'idRefTerms2':(sorted(heatmap_data, key=lambda x: x.lower()), ),
+                        'idRefSources2':(src_ids, src_names),
                         'ascTerms':((True, False), ),
                         'ascSources':((True, False), ),
                         'filetypes':(sorted([str(m) for m in self.mimetypes]), ),

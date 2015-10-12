@@ -295,12 +295,15 @@ def hm_explore(hm_id):
     for name, args in select_mapping.items():
         explore_fields[name] = Select(name, *args).render()
 
-    js1 = """    <script>
+    js0 = """    <script>
     window.onload = function (){jso}
     document.getElementById("sortTerms").addEventListener("change", showTerms, false)
     document.getElementById("sortSources").addEventListener("change", showSources, false)
+    document.getElementById("sortTerms").addEventListener("change", showTerms2, false)
+    document.getElementById("sortSources").addEventListener("change", showSources2, false)
     {jsc}
-
+    </script>"""
+    js1 = """    <script>
     var idSort = {idSortOps};
     var idRef = {idRefOps};
 
@@ -351,6 +354,14 @@ def hm_explore(hm_id):
     {jsc}
     </script>"""
 
+    rep = ['idSortOps', 'idRefOps', 'anysort', '_any', '_iss', '_irs', '_ist', '_irt', '{iss', '{irs', '{ist', '{irt', 'showTerms', 'showSources', 'idSort', 'idRef']
+    js2 = js1
+    for name in rep:
+        js2 = js2.replace(name, name + '2')
+
+    js2 = js2.replace('idSort2Ops2', 'idSortOps2')
+    js2 = js2.replace('idRef2Ops2', 'idRefOps2')
+
     base = '\n'.join((
         '<!doctype html>',  # FIXME ICK
         '<title>NIF Heatmap {hm_id} exploration</title>',
@@ -386,6 +397,24 @@ def hm_explore(hm_id):
                 '<br>',
             '</div>',
 
+            '<div id={anysort2} style="display:none;">',  # FIXME may want to default away from display:none and add it if we have js?
+            '<h3>Second reference value or identifier to sort against:</h3>',
+                '<div id={ist2} style="display:none;">',
+                '{idSortTerms2}',
+                '</div>',
+                '<div id={irt2} style="display:none;">',
+                '{idRefTerms2}',
+                '</div>',
+                '<br>',
+                '<div id={iss2} style="display:none;">',
+                '{idSortSources2}',
+                '</div>',
+                '<div id={irs2} style="display:none;">',
+                '{idRefSources2}',
+                '</div>',
+                '<br>',
+            '</div>',
+
             '<h3>Ascending:</h3>',
             '{ascTerms}',
             '{ascSources} <br>',
@@ -396,7 +425,7 @@ def hm_explore(hm_id):
         '<br><br>',
         '<h3>Expansion: putative term, curie, label, query</h3>',
         '<pre>\n{expansion}\n</pre>',
-        js1))
+        js0, js1, js2))
 
     page = base.format(jso='{', jsc='}', **explore_fields)  # python format is stupid
 
