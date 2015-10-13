@@ -390,15 +390,15 @@ def hm_explore(hm_id):
             '{collTerms}',
             '{collSources} <br>',
             '<h3>Sorting Options:</h3>',
-            '{sortTypes} <br><br>',
+            '{sortTypeTerms}',
+            '{sortTypeSrcs} <br>',
 
-
-            '<h3>Primary sort:</h3>',
+            '<h4>Primary sort:</h4>',
             '{sortTerms}',
             '{sortSources} <br>',
 
             '<div id={anysort} style="display:none;">',  # FIXME may want to default away from display:none and add it if we have js?
-            '<h3>Reference value or identifier to sort against:</h3>',
+            '<h4>Reference value or identifier to sort against:</h4>',
                 '<div id={ist} style="display:none;">',
                 '{idSortTerms}',
                 '</div>',
@@ -415,12 +415,14 @@ def hm_explore(hm_id):
                 '<br>',
             '</div>',
 
-            '<h3>Secondary sort:</h3>',
+            '<div id={secondSort} style="display:none;">',  # FIXME may want to default away from display:none and add it if we have js?
+            '<h4>Secondary sort:</h4>',
             '{sortTerms2}',
             '{sortSources2} <br>',
+            '</div>',
 
             '<div id={anysort2} style="display:none;">',  # FIXME may want to default away from display:none and add it if we have js?
-            '<h3>Second reference value or identifier to sort against:</h3>',
+            '<h4>Second reference value or identifier to sort against:</h4>',
                 '<div id={ist2} style="display:none;">',
                 '{idSortTerms2}',
                 '</div>',

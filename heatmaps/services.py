@@ -552,6 +552,7 @@ class sortstuff:
 
     def double_sort(self, sort_name1, sort_name2, heatmap_data, idSortKey1, idSortKey2, ascending, sortDim, id_name_dict):
         """ This one may also be called externally. Should implement a rank-diff sort. """
+        print('WHAT IS GOING ON HERE')
         ido1, no1 = self.sort(sort_name1, heatmap_data, idSortKey1, ascending, sortDim, id_name_dict)
         ido2, no2 = self.sort(sort_name2, heatmap_data, idSortKey2, ascending, sortDim, id_name_dict)
 
@@ -561,7 +562,7 @@ class sortstuff:
         id_order, name_order = [c for c in zip(*id_sort([(id_, name)  # format expected for key functions
                                 for id_, name in id_name_dict.items()], key=id_key))]
 
-        return 
+        return id_order, name_order
         id_sort1, id_key1 = self.get_sort(sort_name1, heatmap_data, idSortKey1, ascending, sortDim)
         id_sort2, id_key2 = self.get_sort(sort_name2, heatmap_data, idSortKey2, ascending, sortDim)
 
@@ -848,6 +849,7 @@ class heatmap_service(database_service):
         self.sort_same = ss.same
         self.sort_other = ss.other
         self.sort = ss.sort
+        self.double_sort = ss.double_sort
 
     def check_counts(self):
         """ validate that we have the latest, if we do great
@@ -1210,6 +1212,7 @@ class heatmap_service(database_service):
             'irt':'name3',
             'iss':'name4',
             'irs':'name5',
+            'secondSort':'sswoo',
             'anysort2':'name6', # FIXME better naming here?
             'ist2':'name7',
             'irt2':'name8',
@@ -1225,7 +1228,8 @@ class heatmap_service(database_service):
         select_mapping = {  # store this until... when?
                         'collTerms':(self.collTerms, ),
                         'collSources':(self.collSources, ),
-                        'sortTypes':(self.sort_types, ),
+                        'sortTypeTerms':(self.sort_types, ),
+                        'sortTypeSrcs':(self.sort_types, ),
                         'sortTerms':(self.sort_terms, ),
                         'sortSources':(self.sort_srcs, ),
                         'sortTerms2':(self.sort_terms, ),
@@ -1246,7 +1250,7 @@ class heatmap_service(database_service):
         return explore_fields, select_mapping
 
 
-    def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,
+    def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,  # FIXME probably want to convert the Nones for sorts to lists?
                collTerms=None, collSources=None, idSortTerms=None, idSortSources=None,
                ascTerms=True, ascSources=True):
         """
@@ -1318,6 +1322,9 @@ class heatmap_service(database_service):
                     heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
         src_id_order, src_name_order = self.sort(sortSources,
                     heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
+
+        # TODO testing the double_sort, it works, need to update the output api to accomodate it
+        #term_id_order, term_name_order = self.double_sort('identifier', 'frequency', heatmap_data, None, 'nlx_82958', ascTerms, 0, term_id_name_dict)
 
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
