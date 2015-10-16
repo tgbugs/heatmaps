@@ -20,6 +20,7 @@ class hmStats:
         'literature count',
         'arbitrary data source count',  # should just run the full matrix
         'term lenght',
+        'term words',
         'term frequency',
         'depth in ontology hierarchy', 
         'number of relations in ontology',
@@ -33,14 +34,20 @@ class hmStats:
         #self.id_name_dict[LITERATURE_ID] = ('Literature', 'Literature')
         id_coll_dict, self.id_name_dict = sCollapseToSrcName(self.heatmap_data[TOTAL_TERM_ID], id_name_dict)
         self.heatmap_data = applyCollapse(self.heatmap_data, id_coll_dict)  # must reassign
-        self.runStats()
+        cm1, sm1 = self.runStats()
+        #cm2, sm2 = self.runStats(norm=True)
+        #a = cm1 - cm2
+        #b = sm1 - sm2
+        #embed()
     
-    def runStats(self):
+    def runStats(self, norm=False):
         totals = self.heatmap_data[TOTAL_TERM_ID]
         term_order = sorted(self.heatmap_data)
         term_order.remove(TOTAL_TERM_ID)
         src_idn = {s:s for s in totals}
         src_order, _ = ss.sort('frequency', self.heatmap_data, None, True, 1, src_idn)
+        #embed()
+        #return
         #src_order = sorted(totals)
 
         term_stats = []
@@ -52,14 +59,20 @@ class hmStats:
             stats = []
             for src in src_order:
                 if src in term_data:
-                    value = term_data[src]
+                    if norm:
+                        value = term_data[src] / totals[src]  # must normalize by total number of records!
+                    else:
+                        value = term_data[src]
                     if value:
                         freq += 1
-                        total += value
+                        total += value  # warning if using norm...
                     stats.append(value)
                 else:
                     stats.append(0)
 
+            #"""
+            syns = [1]
+            edges = [1, 2]
             """
             _, curie, _, syns = ss.term_server.term_id_expansion(term)
 
@@ -76,10 +89,9 @@ class hmStats:
             stats.append(total)
             stats.append(freq)
             stats.append(len(term))
-            stats.append(.01)  # syns
-            stats.append(.01)  # edges
-            #stats.append(len(syns))
-            #stats.append(len(edges))
+            stats.append(len(term.split(' ')))
+            stats.append(len(syns))
+            stats.append(len(edges))
             #stats.append(freq - term_data[LITERATURE_ID])
 
             term_stats.append(stats)#[::-1])
@@ -87,12 +99,12 @@ class hmStats:
         stats_matrix = np.array(term_stats)
         #stats_order = [' '.join(hms.get_name_from_id(i)[0:2]) for i in src_order]
         stats_order = [self.id_name_dict[i] for i in src_order]  # FIXME we also need the indexable here for the x axis 
-        inset_names = ['total', 'freq', 'term length', 'nsyns', 'nedges']
+        print('num_views', len(stats_order))
+        inset_names = ['total', 'freq', 'term length', 'term words', 'num syns', 'num edges']
         nstats2 = len(inset_names)
         stats_order.extend(inset_names)
         #print(stats_order)
         nstats = stats_matrix.shape[1]
-
         # compute pairwise corr between each pair of sources
         corrs = {}
         corr_mat = np.zeros((nstats, nstats))
@@ -158,13 +170,20 @@ class hmStats:
 
         subax.tick_params(direction='out', length=0, width=0)
 
-        fig.savefig('/tmp/corrtest.png', bbox_inches='tight', pad_inches=.1, dpi=dpi)
+        fig.savefig('/tmp/corrtest%s.png' % self.hm_id, bbox_inches='tight', pad_inches=.1, dpi=dpi)
         #for name in stats_order:
             #print(name)
+
+        return corr_mat, stats_matrix
 
 def main():
     url = 'http://localhost:5000/servicesv1/v1/heatmaps/prov/'
     hms40 = hmStats(40, url)
+    #hms45 = hmStats(45, url)
+    #hms46 = hmStats(46, url)
+    #hms11 = hmStats(11, url)
+    #hms13 = hmStats(13, url)
+    #hms18 = hmStats(18, url)
 
 
 if __name__ == '__main__':
