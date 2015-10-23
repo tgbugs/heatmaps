@@ -12,6 +12,7 @@
 # need to make the title of the csv nice
 # neet to develop a series of tests designed to wreck the text input box
 
+import gzip
 from os import environ
 from flask import Flask, url_for, request, render_template, render_template_string, make_response, abort
 
@@ -453,7 +454,10 @@ def hm_explore(hm_id):
 
     page = base.format(jso='{', jsc='}', **explore_fields)  # python format is stupid
 
-    return page
+    out = make_response(gzip.compress(page.encode()))
+    out.headers['Content-Encoding'] = 'gzip'
+    return out
+
 
 #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
 @hmapp.route(ext_path + "/terms", methods = ['GET'])
