@@ -616,12 +616,16 @@ def do_sep(string):
 #please login to get a doi? implementing this with an auth cookie? how do?
 
 def main(port=5000):
-    if environ.get('HEATMAP_PROD',None):
-        hmapp.debug = False
-        hmapp.run(host='0.0.0.0', threaded=True)  # 0.0.0.0 tells flask to listen externally
-    else:
-        hmapp.debug = True
-        hmapp.run(host='127.0.0.1', port=port, threaded=True)
+    try:
+        if environ.get('HEATMAP_PROD',None):
+            hmapp.debug = False
+            hmapp.run(host='0.0.0.0', threaded=True)  # 0.0.0.0 tells flask to listen externally
+        else:
+            hmapp.debug = True
+            hmapp.run(host='127.0.0.1', port=port, threaded=True)
+    finally:
+        print('closing database connection')
+        hmserv.conn.close()
 
 
 if __name__ == '__main__':
