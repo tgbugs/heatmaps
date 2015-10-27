@@ -70,6 +70,15 @@ CREATE TABLE heatmap_prov_to_term_history(  /* we need this for the many-many ma
         ON UPDATE NO ACTION ON DELETE NO ACTION
 );
 
+CREATE TABLE job_to_heatmap_prov(
+    id serial NOT NULL,  /* simple is good */
+    heatmap_prov_id integer,
+    CONSTRAINT job_id_pkey PRIMARY KEY (id)
+    CONSTRAINT heatmap_prov_id_fkey FOREIGN KEY (heatmap_prov_id)
+        REFERENCES heatmap_prov (id) MATCH SIMPLE
+        ON UPDATE NO ACTION ON DELETE NO ACTION
+);
+
 -- 7 grant select and insert for the user on the new tables /*heatmapadmin heatmap_test*/--
 GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA heatmap TO heatmapuser;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA heatmap TO heatmapuser;
