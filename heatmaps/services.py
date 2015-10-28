@@ -1102,6 +1102,9 @@ class heatmap_service(database_service):
                     sql_get_dt = "SELECT DateTime FROM heatmap_prov WHERE id=%s" 
                     args = (existing_hm_id,)
                     timestamp = self.cursor_exec(sql_get_dt, args)
+                    sql_update_job = "UPDATE job_to_heatmap_prov SET heatmap_prov_id = %s WHERE id = %s"
+                    job_args = (existing_hm_id, job_id)
+                    self.cursor_exec(sql_update_job, job_args)
                     return hm_data, existing_hm_id, timestamp
 
         #create a new record in heatmap_prov since we didn't find an existing record
