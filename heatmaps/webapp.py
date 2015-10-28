@@ -158,11 +158,12 @@ def TERMFILE(name):  # TODO fuzz me!  #FIXME blank lines cause 500 errors!
         file = request.files[name]
         print('TERMFILE type', file)
         terms = [l.rstrip().decode() for l in file.stream.readlines() if l]
-        return do_terms(terms)
+        filename = file.filename
+        return do_terms(terms, filename)
     except KeyError:
         raise
 
-def do_terms(terms):
+def do_terms(terms, filename=None):
     # FIXME FIXME this is NOT were we should be doing data sanitizaiton :/
     if not terms:
         print('no terms!')
@@ -172,7 +173,7 @@ def do_terms(terms):
     if bad_terms:
         return 'Bad terms detected! Please fix and resubmit!<br>' + repr(bad_terms)
 
-    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(cleaned_terms)
+    hm_data, hp_id, timestamp = hmserv.make_heatmap_data(cleaned_terms, filename)
     if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
         return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
     #return repr((hm_data, hp_id, timestamp))
@@ -382,6 +383,7 @@ def hm_explore(hm_id):
         '<title>NIF Heatmap {hm_id} exploration</title>',
         '<h1>Explore heatmap {hm_id}</h1>'
         '<h2>Created on: {date} at {time}</h2>',
+        '<h2>Filename: {filename}</h2>',
         '<h3>Number of terms: {num_terms}</h3>',
         '<h3>Terms found in ontology: {num_matches}</h3>',
         '<br><br>',

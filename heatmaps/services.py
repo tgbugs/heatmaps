@@ -904,15 +904,16 @@ class heatmap_service(database_service):
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)
 
     @sanitize_input
-    def get_timestamp_from_id(self, hm_id):
-        sql = """SELECT datetime FROM heatmap_prov WHERE id=%s;"""
+    def get_prov_from_id(self, hm_id):
+        sql = """SELECT datetime, filename FROM heatmap_prov WHERE id=%s;"""
         args = (hm_id,)
         tuples = self.cursor_exec(sql, args)
         if tuples:
-            timestamp = tuples[0][0].isoformat()
-            return timestamp
+            timestamp, filename = tuples[0]
+            timestamp = timestamp.isoformat()
+            return timestamp, filename if filename != None else ''
         else:
-            return None
+            return None, None
 
     def get_term_counts(self, cleaned_terms, *args, retry=True):  #FIXME this fails if given an id!
         """ given a collection of terms returns a dict of dicts of their counts
@@ -1003,7 +1004,7 @@ class heatmap_service(database_service):
         return name_order
 
     @sanitize_input
-    def make_heatmap_data(self, cleaned_terms):  # FIXME error handling
+    def make_heatmap_data(self, cleaned_terms, filename=None):  # FIXME error handling
         # SUEPER DUPER FIXME this has to be converted to async :/ preferably in webapp.py
         # FIXME FIXME, caching and detection of existing heatmaps is BROKEN
         # 1) we invalidate caches incorrectly and we can be fooled by a cached
@@ -1081,9 +1082,9 @@ class heatmap_service(database_service):
             #reccomend that users request the terms they need a single time for download
             #OR we just rate limit the number of heatmaps that can be requested XXX <-this
             #create the record
-        sql_hp = "INSERT INTO heatmap_prov DEFAULT VALUES RETURNING id, DateTime"  # just use the primary key in the url
-        print(sql_hp)
-        [(hp_id, timestamp)] = self.cursor_exec(sql_hp)
+        sql_hp = "INSERT INTO heatmap_prov (filename) VALUES (%s) RETURNING id, DateTime"
+        args = (filename,)
+        [(hp_id, timestamp)] = self.cursor_exec(sql_hp, args)
         #hp_id = hp_result[0][0]
 
         #insert into heatmap_prov_to_term_history
@@ -1173,7 +1174,7 @@ class heatmap_service(database_service):
         """ Generate the input data for select fields
             in a way that enables safe validation."""
 
-        timestamp = self.get_timestamp_from_id(hm_id)
+        timestamp, filename = self.get_prov_from_id(hm_id)
         if not timestamp:
             return None, None  # FIXME make sure to map back to abort(404)
         else:
@@ -1202,6 +1203,7 @@ class heatmap_service(database_service):
 
         explore_fields = {
             'hm_id':hm_id,
+            'filename':filename,
             'num_terms':len(heatmap_data),
             'num_matches':num_matches,
             'time':time,
@@ -1265,7 +1267,7 @@ class heatmap_service(database_service):
         if not heatmap_data:
             return None, "No heatmap with that ID!", None
 
-        timestamp = self.get_timestamp_from_id(heatmap_id)  # FIXME start/done timestamp? no answer to the yet :/
+        timestamp, _ = self.get_prov_from_id(heatmap_id)  # FIXME start/done timestamp? no answer to the yet :/
         timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
         filename = 'nif_heatmap_%s_%s.%s' % (heatmap_id, timestamp, filetype)
 
