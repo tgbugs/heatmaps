@@ -88,7 +88,7 @@ CREATE TABLE job_to_heatmap_prov(
 -- 7 grant select and insert for the user on the new tables /*heatmapadmin heatmap_test*/--
 GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA heatmap TO heatmapuser;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA heatmap TO heatmapuser;
-
+GRANT UPDATE ON job_to_heatmap_prov TO heatmapuser;
 -- 8 do alters, redundant if run as heatmapuser /*heatmapadmin heatmap_test*/--
 ALTER TABLE heatmap_prov OWNER TO heatmapadmin;
 ALTER TABLE term_history OWNER TO heatmapadmin;
