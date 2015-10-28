@@ -517,6 +517,9 @@ def hm_jobs(job_id):
     if request.method == 'POST':
         return str(hm_id) if hm_id else '0'  # to talk to the javascript... and redraw the page with the 'jobs done'
     elif request.method == 'GET':
+        if hm_id is None:
+            # TODO
+            return abort(404)
         return redirect(ext_path + '/explore/%s' % hm_id)
 
 @hmapp.route(ext_path + "/prov/<hm_id>", methods = ['GET'])
