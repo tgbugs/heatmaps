@@ -1004,6 +1004,26 @@ class heatmap_service(database_service):
         return name_order
 
     @sanitize_input
+    def submit_heatmap_job(self, cleaned_terms, filename=None):
+        # if less than 5 terms...
+        sql = "INSERT INTO job_to_heatmap_prov DEFAULT VALUES RETURNING id"
+        [(job_id,)] = self.cursor_exec(sql)
+        self.ppe.submit(self.make_heatmap_data, job_id, cleaned_terms, filename)  # WARNING RACE CONDITIONS ABOUND?
+        return job_id
+
+    @sanitize_input
+    def get_job(self, job_id):
+        sql = "SELECT heatmap_prov_id FROM job_to_heatmap_prov WHERE id = %s"
+        args = (job_id,)
+        tuples = self.cursor_exec(sql, args)
+        if not tuples:
+            raise KeyError('No job with id = %s! Something has gone wrong!' % job_id)  # FIXME we don't want this :/
+        else:
+            [(hp_id,)] = tuples
+
+        return hp_id
+
+    @sanitize_input
     def make_heatmap_data(self, cleaned_terms, filename=None):  # FIXME error handling
         # SUEPER DUPER FIXME this has to be converted to async :/ preferably in webapp.py
         # FIXME FIXME, caching and detection of existing heatmaps is BROKEN

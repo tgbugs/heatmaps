@@ -14,7 +14,7 @@
 
 import gzip
 from os import environ
-from flask import Flask, url_for, request, render_template, render_template_string, make_response, abort
+from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort
 
 if environ.get('HEATMAP_PROD',None):
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
@@ -489,7 +489,24 @@ def hm_submit():
         return terms_form.data_received()
     else:
         return "Nothing submited FIXME need to keep session alive??!"
-    
+
+@hmapp.route(ext_path + "/terms/jobs/<job_id>", methods = ['GET', 'POST'])
+def hm_jobs(job_id):
+    # GET should redirect to the finished heatmap OR start the polling process if the job has been submitted but not finished
+    try:
+        job_id = int(job_id)
+    except ValueError:
+        return abort(404)
+
+    try:
+        hm_id = hmserv.get_job(job_id)
+    except KeyError:  # no job with that id...
+        return abort(404)
+
+    if request.method == 'POST':
+        return str(hm_id) if hm_id else '0'  # to talk to the javascript... and redraw the page with the 'jobs done'
+    elif request.method == 'GET':
+        return redirect(ext_path + '/explore/%s' % hm_id)
 
 @hmapp.route(ext_path + "/prov/<hm_id>", methods = ['GET'])
 @hmapp.route(ext_path + "/prov/<hm_id>.<filetype>", methods = ['GET'])
@@ -502,8 +519,6 @@ def hm_getfile(hm_id, filetype=None):
             return abort(404)
     except ValueError:
         return abort(404)
-        #return 'Invalid heatmap identifier "%s", please enter an integer.' % hm_id, 404
-        #return None, 404
     
 
 #@hmapp.route(hmext + )
