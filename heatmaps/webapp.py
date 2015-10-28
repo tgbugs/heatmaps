@@ -173,6 +173,17 @@ def do_terms(terms, filename=None):
     if bad_terms:
         return 'Bad terms detected! Please fix and resubmit!<br>' + repr(bad_terms)
 
+    if len(cleaned_terms) <= hmserv.TERM_MIN:  # FIXME I'm not happy w/ having this code here
+        return hmserv.make_heatmap_data(cleaned_terms, None, filename)
+
+    job_id = hmserv.submit_heatmap_job(cleaned_terms, filename)
+
+    output = ('Your list of terms has been submitted, your job is currently'
+              'processing and you will be notified when it completes.'
+              'Your job_id is %s.') % job_id
+
+    return output
+
     hm_data, hp_id, timestamp = hmserv.make_heatmap_data(cleaned_terms, filename)
     if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
         return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
