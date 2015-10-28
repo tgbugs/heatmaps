@@ -12,7 +12,7 @@
 import json
 from functools import wraps
 from os import environ, path
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import requests
 import psycopg2 as pg
@@ -839,6 +839,7 @@ class heatmap_service(database_service):
                      }
 
         self.ppe = ProcessPoolExecutor()
+        self.tpe = ThreadPoolExecutor(2)  # psycopg says this is safe?
 
         # this seems a bad way to pass stuff out to the webapp?
         ss = sortstuff()
@@ -1005,10 +1006,12 @@ class heatmap_service(database_service):
 
     @sanitize_input
     def submit_heatmap_job(self, cleaned_terms, filename=None):
-        # if less than 5 terms...
         sql = "INSERT INTO job_to_heatmap_prov DEFAULT VALUES RETURNING id"
         [(job_id,)] = self.cursor_exec(sql)
-        self.ppe.submit(self.make_heatmap_data, job_id, cleaned_terms, filename)  # WARNING RACE CONDITIONS ABOUND?
+        self.conn.commit()
+        # FIXME this works for now... because mhd is mostly io bound so threads are ok
+        #self.make_heatmap_data(cleaned_terms, job_id, filename)
+        self.tpe.submit(self.make_heatmap_data, cleaned_terms, job_id, filename)  # XXX watch for silent faiures here!
         return job_id
 
     @sanitize_input
@@ -1024,7 +1027,7 @@ class heatmap_service(database_service):
         return hp_id
 
     @sanitize_input
-    def make_heatmap_data(self, cleaned_terms, filename=None):  # FIXME error handling
+    def make_heatmap_data(self, cleaned_terms, job_id, filename=None):  # FIXME error handling
         # SUEPER DUPER FIXME this has to be converted to async :/ preferably in webapp.py
         # FIXME FIXME, caching and detection of existing heatmaps is BROKEN
         # 1) we invalidate caches incorrectly and we can be fooled by a cached
@@ -1046,6 +1049,9 @@ class heatmap_service(database_service):
             message = "We do not mint DOIS for heatmaps with less than %s terms."%self.TERM_MIN
             print(message)
             return hm_data, None, message
+
+        if job_id is None:
+            raise BaseException('We should NEVER ge here, self.TERM_MIN should always catch this.')
 
         #check if we already have matching data in term_history
             #if we have matching data record the
@@ -1114,6 +1120,11 @@ class heatmap_service(database_service):
         junc_args = (hp_ids, th_ids)
         sql_values = b",".join(self.mogrify("(%s,%s)", tup) for tup in zip(*junc_args))
         self.cursor_exec(sql_add_junc + sql_values)
+
+        #update the job with the completed heatmap id, I feel like this *could* be done with a trigger, but would require dupe of job_id
+        sql_update_job = "UPDATE job_to_heatmap_prov SET heatmap_prov_id = %s WHERE id = %s"
+        job_args = (hp_id, job_id)
+        self.cursor_exec(sql_update_job, job_args)
 
         #commit it (probably wrap this in a try/except)
         self.conn.commit()
