@@ -49,8 +49,13 @@ CREATE TABLE heatmap_prov(
     /*doi text, */ /* just use the primary key and don't fiddle */
     /*requesting_person text,  *//* ARGH THE DESIRE TO NORMALIZE we can do this with the dois later if we really want to, RI is not critical*/
     datetime timestamp default CURRENT_TIMESTAMP,  /*enforce this in the db*/
+    filename varchar(4096),  /* added, see alter table below*/
     CONSTRAINT heatmap_prov_pkey PRIMARY KEY (id)
 );
+
+/*
+ALTER TABLE IF EXISTS heatmap_prov ADD filename varchar(4096);
+ */
 
 CREATE TABLE term_history(
     id serial NOT NULL,
@@ -72,8 +77,9 @@ CREATE TABLE heatmap_prov_to_term_history(  /* we need this for the many-many ma
 
 CREATE TABLE job_to_heatmap_prov(
     id serial NOT NULL,  /* simple is good */
+    datetime timestamp default CURRENT_TIMESTAMP,  /*enforce this in the db*/
     heatmap_prov_id integer,
-    CONSTRAINT job_id_pkey PRIMARY KEY (id)
+    CONSTRAINT job_id_pkey PRIMARY KEY (id),
     CONSTRAINT heatmap_prov_id_fkey FOREIGN KEY (heatmap_prov_id)
         REFERENCES heatmap_prov (id) MATCH SIMPLE
         ON UPDATE NO ACTION ON DELETE NO ACTION
