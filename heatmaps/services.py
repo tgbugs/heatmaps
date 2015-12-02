@@ -400,7 +400,7 @@ class summary_service:  # FIXME implement as a service/coro? with asyncio?
     old_url = "http://nif-services.neuinfo.org/servicesv1/v1/summary.json?q=%s"
     url = "http://beta.neuinfo.org/services/v1/summary.json?q=%s"
     url, old_url = old_url, url
-    _timeout = 20
+    _timeout = 60
 
     missing_ids = 'nif-0000-21197-1', 'nif-0000-00053-2'
 
@@ -758,14 +758,14 @@ class database_service:  # FIXME reimplement with asyncio?
     """
     dbname = ""
     user = ""
-    host = "localhost"#"postgres-stage@neuinfo.org"
+    host = "localhost"#"postgres-stage.neuinfo.org"
     port = 5432
     DEBUG = True
     def __init__(self):
         self.conn = pg.connect(dbname=self.dbname, user=self.user, host=self.host, port=self.port)
-        pg.extras.register_hstore(self.conn, globally=True)
+        pg.extras.register_hstore(self.conn, globally=True)  # beware databases lacking this!
     def __enter__(self):
-        pass
+        return self
     def __exit__(self, type_, value, traceback):
         self.conn.close()
 
