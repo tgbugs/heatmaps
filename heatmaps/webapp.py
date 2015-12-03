@@ -176,11 +176,18 @@ def do_terms(terms, filename=None):
     if len(cleaned_terms) <= hmserv.TERM_MIN:  # FIXME I'm not happy w/ having this code here
         return hmserv.make_heatmap_data(cleaned_terms, None, filename)
 
-    job_id = hmserv.submit_heatmap_job(cleaned_terms, filename)
+    job_id = hmserv.submit_heatmap_job(cleaned_terms, filename)  # FIXME will increment even when the jobid resolves to an old jobid!
 
+    javascript = (''
+                  '')
+
+    base_url = 'http://' + request.host + ext_path
+    job_url = base_url + '/terms/jobs/' + str(job_id)
     output = ('Your list of terms has been submitted, your job is currently'
               'processing and you will be notified when it completes.'
-              'Your job_id is %s.') % job_id
+              'Your job_id is {JOBID}. You when your job is done the url below will'
+              'redirect to your heatmap.<br>'
+              '<a href={JOBURL}>{JOBURL}</a>').format(JOBID=job_id, JOBURL=job_url)
 
     return output
 
@@ -188,7 +195,6 @@ def do_terms(terms, filename=None):
     if hp_id == None:  # no id means we'll give the data but not store it (for now :/)
         return repr((timestamp, hm_data))  # FIXME this is a nasty hack to pass error msg out
     #return repr((hm_data, hp_id, timestamp))
-    base_url = 'http://' + request.host + ext_path
     output = """
             <!doctype html>
             <title>Submit</title>
@@ -497,7 +503,16 @@ def hm_submit():
         # page to tell users that their job is done
         # this will require reworking when we put things into the database
         # and possibly the schema :/
-        return terms_form.data_received()
+        if request.json is not None:
+            data = request.json
+            if {'terms','filename'} != set(data):
+                return abort(400)
+            else:
+                #print(data['terms'], data['filename'])
+                #return 'COOKIES'
+                return do_terms(data['terms'], data['filename'])  # THAT WAS EASY
+        else:
+            return terms_form.data_received()
     else:
         return "Nothing submited FIXME need to keep session alive??!"
 
