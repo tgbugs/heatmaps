@@ -761,9 +761,11 @@ class database_service:  # FIXME reimplement with asyncio?
     host = "localhost"#"postgres-stage.neuinfo.org"
     port = 5432
     DEBUG = True
+    hstore = False
     def __init__(self):
         self.conn = pg.connect(dbname=self.dbname, user=self.user, host=self.host, port=self.port)
-        pg.extras.register_hstore(self.conn, globally=True)  # beware databases lacking this!
+        if self.hstore:
+            pg.extras.register_hstore(self.conn, globally=True)  # beware databases lacking this!
     def __enter__(self):
         return self
     def __exit__(self, type_, value, traceback):
@@ -812,6 +814,7 @@ class heatmap_service(database_service):
         host = "localhost"#"postgres-stage@neuinfo.org"
     user = "heatmapuser"
     port = 5432
+    hstore = True
     TERM_MIN = 5
     supported_filetypes = None, 'csv', 'json', 'png'  # need for output
     mimetypes = {None:'text/plain',
