@@ -7,19 +7,23 @@
     by scigraph.py
 """
 import requests
+from json import dumps
 
-exten_mapping = {'application/xgmml': 'xgmml', 'text/plain': 'plain', 'text/plain; charset=utf-8': 'plain; charset=utf-8', 'text/tab-separated-values': 'tab-separated-values', 'image/jpeg': 'jpeg', 'text/html': 'html', 'text/csv': 'csv', 'text/gml': 'gml', 'application/json': 'json', 'application/xml': 'xml', 'application/graphson': 'graphson', 'image/png': 'png', 'application/graphml+xml': 'graphml+xml'}
+exten_mapping = {'text/plain': 'plain', 'image/jpeg': 'jpeg', 'text/gml': 'gml', 'text/csv': 'csv', 'text/html': 'html', 'application/xgmml': 'xgmml', 'application/json': 'json', 'text/tab-separated-values': 'tab-separated-values', 'application/graphml+xml': 'graphml+xml', 'image/png': 'png', 'application/xml': 'xml', 'application/graphson': 'graphson', 'text/plain; charset=utf-8': 'plain; charset=utf-8'}
 
 class restService:
     """ Base class for SciGraph rest services. """
 
-    def _get(self, method, url, output=None):
-        print(url)
+    def _get(self, method, url, params=None, output=None):
         s = requests.Session()
-        req = requests.Request(method=method, url=url)
+        if method == 'POST':
+            req = requests.Request(method=method, url=url, data=params)
+        else:
+            req = requests.Request(method=method, url=url, params=params)
         if output:
             req.headers['Accept'] = output
         prep = req.prepare()
+        print(prep.url)
         resp = s.send(prep)
         if not resp.ok:
             return None
@@ -33,7 +37,7 @@ class restService:
     def _make_rest(self, default=None, **kwargs):
         kwargs = {k:v for k, v in kwargs.items() if v}
         param_rest = '&'.join(['%s={%s}' % (arg, arg) for arg in kwargs if arg != default])
-        param_rest = '?' + param_rest if param_rest else param_rest
+        param_rest = param_rest if param_rest else ''
         return param_rest
 
 
@@ -55,9 +59,11 @@ class Graph(restService):
         """
 
         kwargs = {'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest(None, **kwargs)
-        url = self._basePath + ('/graph/properties' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/graph/properties').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != None}
+        return self._get('GET', url, requests_params, output)
 
     def getNode(self, id, project='*', callback=None, output='application/json'):
         """ Get all properties of a node from: /graph/{id}
@@ -82,9 +88,11 @@ class Graph(restService):
         """
 
         kwargs = {'id':id, 'project':project, 'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('id', **kwargs)
-        url = self._basePath + ('/graph/{id}' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/graph/{id}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'id'}
+        return self._get('GET', url, requests_params, output)
 
     def getEdges(self, type, entail='true', limit=100, skip=0, callback=None, output='application/json'):
         """ Get nodes connected by an edge type from: /graph/edges/{type}
@@ -111,9 +119,11 @@ class Graph(restService):
         """
 
         kwargs = {'type':type, 'entail':entail, 'limit':limit, 'skip':skip, 'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('type', **kwargs)
-        url = self._basePath + ('/graph/edges/{type}' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/graph/edges/{type}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'type'}
+        return self._get('GET', url, requests_params, output)
 
     def getRelationships(self, callback=None, output='application/json'):
         """ Get all relationship types from: /graph/relationship_types
@@ -127,9 +137,11 @@ class Graph(restService):
         """
 
         kwargs = {'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest(None, **kwargs)
-        url = self._basePath + ('/graph/relationship_types' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/graph/relationship_types').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != None}
+        return self._get('GET', url, requests_params, output)
 
     def getNeighbors(self, id, depth=1, blankNodes='false', relationshipType=None, direction='BOTH', project='*', callback=None, output='application/json'):
         """ Get neighbors from: /graph/neighbors/{id}
@@ -158,9 +170,11 @@ class Graph(restService):
         """
 
         kwargs = {'id':id, 'depth':depth, 'blankNodes':blankNodes, 'relationshipType':relationshipType, 'direction':direction, 'project':project, 'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('id', **kwargs)
-        url = self._basePath + ('/graph/neighbors/{id}' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/graph/neighbors/{id}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'id'}
+        return self._get('GET', url, requests_params, output)
 
     def getNeighborsFromMultipleRoots(self, id, depth=1, blankNodes='false', relationshipType=None, direction='BOTH', project='*', callback=None, output='application/json'):
         """ Get neighbors from: /graph/neighbors
@@ -189,9 +203,11 @@ class Graph(restService):
         """
 
         kwargs = {'id':id, 'depth':depth, 'blankNodes':blankNodes, 'relationshipType':relationshipType, 'direction':direction, 'project':project, 'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('id', **kwargs)
-        url = self._basePath + ('/graph/neighbors' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/graph/neighbors').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'id'}
+        return self._get('GET', url, requests_params, output)
 
 
 class Refine(restService):
@@ -225,9 +241,11 @@ class Refine(restService):
         """
 
         kwargs = {'query':query, 'queries':queries}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest(None, **kwargs)
-        url = self._basePath + ('/refine/reconcile' + param_rest).format(**kwargs)
-        return self._get('POST', url)
+        url = self._basePath + ('/refine/reconcile').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != None}
+        return self._get('POST', url, requests_params)
 
     def suggestFromTerm(self, query=None, queries=None, callback=None):
         """ Reconcile terms from: /refine/reconcile
@@ -257,9 +275,11 @@ class Refine(restService):
         """
 
         kwargs = {'query':query, 'queries':queries, 'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest(None, **kwargs)
-        url = self._basePath + ('/refine/reconcile' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/refine/reconcile').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != None}
+        return self._get('GET', url, requests_params)
 
 
 class Analyzer(restService):
@@ -283,9 +303,11 @@ class Analyzer(restService):
         """
 
         kwargs = {'sample':sample, 'ontologyClass':ontologyClass, 'path':path, 'callback':callback}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('path', **kwargs)
-        url = self._basePath + ('/analyzer/enrichment' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/analyzer/enrichment').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'path'}
+        return self._get('GET', url, requests_params, output)
 
 
 class Cypher(restService):
@@ -304,9 +326,11 @@ class Cypher(restService):
         """
 
         kwargs = {'cypherQuery':cypherQuery}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('cypherQuery', **kwargs)
-        url = self._basePath + ('/cypher/resolve' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/cypher/resolve').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'cypherQuery'}
+        return self._get('GET', url, requests_params, output)
 
 
 class Annotations(restService):
@@ -330,9 +354,11 @@ class Annotations(restService):
         """
 
         kwargs = {'content':content, 'includeCat':includeCat, 'excludeCat':excludeCat, 'minLength':minLength, 'longestOnly':longestOnly, 'includeAbbrev':includeAbbrev, 'includeAcronym':includeAcronym, 'includeNumbers':includeNumbers}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('content', **kwargs)
-        url = self._basePath + ('/annotations/entities' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/annotations/entities').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'content'}
+        return self._get('GET', url, requests_params)
 
     def postEntities(self, content, includeCat=None, excludeCat=None, minLength=4, longestOnly='false', includeAbbrev='false', includeAcronym='false', includeNumbers='false'):
         """ Get entities from text from: /annotations/entities
@@ -349,9 +375,11 @@ class Annotations(restService):
         """
 
         kwargs = {'content':content, 'includeCat':includeCat, 'excludeCat':excludeCat, 'minLength':minLength, 'longestOnly':longestOnly, 'includeAbbrev':includeAbbrev, 'includeAcronym':includeAcronym, 'includeNumbers':includeNumbers}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('content', **kwargs)
-        url = self._basePath + ('/annotations/entities' + param_rest).format(**kwargs)
-        return self._get('POST', url)
+        url = self._basePath + ('/annotations/entities').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'content'}
+        return self._get('POST', url, requests_params)
 
     def annotate(self, content, includeCat=None, excludeCat=None, minLength=4, longestOnly='false', includeAbbrev='false', includeAcronym='false', includeNumbers='false', output='text/plain; charset=utf-8'):
         """ Annotate text from: /annotations
@@ -370,9 +398,11 @@ class Annotations(restService):
         """
 
         kwargs = {'content':content, 'includeCat':includeCat, 'excludeCat':excludeCat, 'minLength':minLength, 'longestOnly':longestOnly, 'includeAbbrev':includeAbbrev, 'includeAcronym':includeAcronym, 'includeNumbers':includeNumbers}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('content', **kwargs)
-        url = self._basePath + ('/annotations' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/annotations').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'content'}
+        return self._get('GET', url, requests_params, output)
 
     def annotatePost(self, content, includeCat=None, excludeCat=None, minLength=4, longestOnly='false', includeAbbrev='false', includeAcronym='false', includeNumbers='false', ignoreTag=None, stylesheet=None, scripts=None, targetId=None, targetClass=None):
         """ Annotate text from: /annotations
@@ -394,9 +424,11 @@ class Annotations(restService):
         """
 
         kwargs = {'content':content, 'includeCat':includeCat, 'excludeCat':excludeCat, 'minLength':minLength, 'longestOnly':longestOnly, 'includeAbbrev':includeAbbrev, 'includeAcronym':includeAcronym, 'includeNumbers':includeNumbers, 'ignoreTag':ignoreTag, 'stylesheet':stylesheet, 'scripts':scripts, 'targetId':targetId, 'targetClass':targetClass}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('content', **kwargs)
-        url = self._basePath + ('/annotations' + param_rest).format(**kwargs)
-        return self._get('POST', url)
+        url = self._basePath + ('/annotations').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'content'}
+        return self._get('POST', url, requests_params)
 
     def annotateUrl(self, url, includeCat=None, excludeCat=None, minLength=4, longestOnly='false', includeAbbrev='false', includeAcronym='false', includeNumbers='false', ignoreTag=None, stylesheet=None, scripts=None, targetId=None, targetClass=None, output='text/html'):
         """ Annotate a URL from: /annotations/url
@@ -420,9 +452,11 @@ class Annotations(restService):
         """
 
         kwargs = {'url':url, 'includeCat':includeCat, 'excludeCat':excludeCat, 'minLength':minLength, 'longestOnly':longestOnly, 'includeAbbrev':includeAbbrev, 'includeAcronym':includeAcronym, 'includeNumbers':includeNumbers, 'ignoreTag':ignoreTag, 'stylesheet':stylesheet, 'scripts':scripts, 'targetId':targetId, 'targetClass':targetClass}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('url', **kwargs)
-        url = self._basePath + ('/annotations/url' + param_rest).format(**kwargs)
-        return self._get('GET', url, output)
+        url = self._basePath + ('/annotations/url').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'url'}
+        return self._get('GET', url, requests_params, output)
 
     def getEntitiesAndContent(self, content, includeCat=None, excludeCat=None, minLength=4, longestOnly='false', includeAbbrev='false', includeAcronym='false', includeNumbers='false'):
         """ Get embedded annotations as well as a separate list from: /annotations/complete
@@ -439,9 +473,11 @@ class Annotations(restService):
         """
 
         kwargs = {'content':content, 'includeCat':includeCat, 'excludeCat':excludeCat, 'minLength':minLength, 'longestOnly':longestOnly, 'includeAbbrev':includeAbbrev, 'includeAcronym':includeAcronym, 'includeNumbers':includeNumbers}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('content', **kwargs)
-        url = self._basePath + ('/annotations/complete' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/annotations/complete').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'content'}
+        return self._get('GET', url, requests_params)
 
     def postEntitiesAndContent(self, content, includeCat=None, excludeCat=None, minLength=4, longestOnly='false', includeAbbrev='false', includeAcronym='false', includeNumbers='false'):
         """ Get embedded annotations as well as a separate list from: /annotations/complete
@@ -458,9 +494,11 @@ class Annotations(restService):
         """
 
         kwargs = {'content':content, 'includeCat':includeCat, 'excludeCat':excludeCat, 'minLength':minLength, 'longestOnly':longestOnly, 'includeAbbrev':includeAbbrev, 'includeAcronym':includeAcronym, 'includeNumbers':includeNumbers}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('content', **kwargs)
-        url = self._basePath + ('/annotations/complete' + param_rest).format(**kwargs)
-        return self._get('POST', url)
+        url = self._basePath + ('/annotations/complete').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'content'}
+        return self._get('POST', url, requests_params)
 
 
 class Lexical(restService):
@@ -477,9 +515,11 @@ class Lexical(restService):
         """
 
         kwargs = {'text':text}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('text', **kwargs)
-        url = self._basePath + ('/lexical/chunks' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/lexical/chunks').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'text'}
+        return self._get('GET', url, requests_params)
 
     def getEntities(self, text):
         """ Extract entities from text. from: /lexical/entities
@@ -489,9 +529,11 @@ class Lexical(restService):
         """
 
         kwargs = {'text':text}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('text', **kwargs)
-        url = self._basePath + ('/lexical/entities' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/lexical/entities').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'text'}
+        return self._get('GET', url, requests_params)
 
     def getSentences(self, text):
         """ Split text into sentences. from: /lexical/sentences
@@ -501,9 +543,11 @@ class Lexical(restService):
         """
 
         kwargs = {'text':text}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('text', **kwargs)
-        url = self._basePath + ('/lexical/sentences' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/lexical/sentences').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'text'}
+        return self._get('GET', url, requests_params)
 
     def getPos(self, text):
         """ Tag parts of speech. from: /lexical/pos
@@ -513,9 +557,11 @@ class Lexical(restService):
         """
 
         kwargs = {'text':text}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('text', **kwargs)
-        url = self._basePath + ('/lexical/pos' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/lexical/pos').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'text'}
+        return self._get('GET', url, requests_params)
 
 
 class Vocabulary(restService):
@@ -532,9 +578,11 @@ class Vocabulary(restService):
         """
 
         kwargs = {}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest(None, **kwargs)
-        url = self._basePath + ('/vocabulary/categories' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/vocabulary/categories').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != None}
+        return self._get('GET', url, requests_params)
 
     def suggestFromTerm(self, term, limit=1):
         """ Suggest terms from: /vocabulary/suggestions/{term}
@@ -545,9 +593,11 @@ class Vocabulary(restService):
         """
 
         kwargs = {'term':term, 'limit':limit}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('term', **kwargs)
-        url = self._basePath + ('/vocabulary/suggestions/{term}' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/vocabulary/suggestions/{term}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'term'}
+        return self._get('GET', url, requests_params)
 
     def findByPrefix(self, term, limit=20, searchSynonyms='true', searchAbbreviations='false', searchAcronyms='false', includeDeprecated='false', category=None, prefix=None):
         """ Find a concept by its prefix from: /vocabulary/autocomplete/{term}
@@ -564,9 +614,11 @@ class Vocabulary(restService):
         """
 
         kwargs = {'term':term, 'limit':limit, 'searchSynonyms':searchSynonyms, 'searchAbbreviations':searchAbbreviations, 'searchAcronyms':searchAcronyms, 'includeDeprecated':includeDeprecated, 'category':category, 'prefix':prefix}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('term', **kwargs)
-        url = self._basePath + ('/vocabulary/autocomplete/{term}' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/vocabulary/autocomplete/{term}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'term'}
+        return self._get('GET', url, requests_params)
 
     def findByTerm(self, term, limit=20, searchSynonyms='true', searchAbbreviations='false', searchAcronyms='false', category=None, prefix=None):
         """ Find a concept from a term from: /vocabulary/term/{term}
@@ -582,9 +634,11 @@ class Vocabulary(restService):
         """
 
         kwargs = {'term':term, 'limit':limit, 'searchSynonyms':searchSynonyms, 'searchAbbreviations':searchAbbreviations, 'searchAcronyms':searchAcronyms, 'category':category, 'prefix':prefix}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('term', **kwargs)
-        url = self._basePath + ('/vocabulary/term/{term}' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/vocabulary/term/{term}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'term'}
+        return self._get('GET', url, requests_params)
 
     def findById(self, id):
         """ Find a concept by its ID from: /vocabulary/id/{id}
@@ -594,9 +648,11 @@ class Vocabulary(restService):
         """
 
         kwargs = {'id':id}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('id', **kwargs)
-        url = self._basePath + ('/vocabulary/id/{id}' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/vocabulary/id/{id}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'id'}
+        return self._get('GET', url, requests_params)
 
     def searchByTerm(self, term, limit=20, searchSynonyms='true', searchAbbreviations='false', searchAcronyms='false', category=None, prefix=None):
         """ Find a concept from a term fragment from: /vocabulary/search/{term}
@@ -612,9 +668,11 @@ class Vocabulary(restService):
         """
 
         kwargs = {'term':term, 'limit':limit, 'searchSynonyms':searchSynonyms, 'searchAbbreviations':searchAbbreviations, 'searchAcronyms':searchAcronyms, 'category':category, 'prefix':prefix}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest('term', **kwargs)
-        url = self._basePath + ('/vocabulary/search/{term}' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/vocabulary/search/{term}').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != 'term'}
+        return self._get('GET', url, requests_params)
 
     def getCuriePrefixes(self):
         """ Get all CURIE prefixes from: /vocabulary/prefixes
@@ -624,7 +682,9 @@ class Vocabulary(restService):
         """
 
         kwargs = {}
+        kwargs = {k:dumps(v) if type(v) is dict else v for k, v in kwargs.items()}
         param_rest = self._make_rest(None, **kwargs)
-        url = self._basePath + ('/vocabulary/prefixes' + param_rest).format(**kwargs)
-        return self._get('GET', url)
+        url = self._basePath + ('/vocabulary/prefixes').format(**kwargs)
+        requests_params = {k:v for k, v in kwargs.items() if v != None}
+        return self._get('GET', url, requests_params)
 
