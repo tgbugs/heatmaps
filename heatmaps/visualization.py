@@ -79,7 +79,7 @@ def sCollToLength(keys, id_name_dict):
         for innerKey in keys[key]:
             key_collections_dict[parent_key].add(innerKey)
         new_id_name_dict[parent_key].add(key)
-    return dict(key_collections_dict), dict(new_id_name_dict)
+    return dict(new_id_name_dict), dict(key_collections_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
