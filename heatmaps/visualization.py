@@ -270,6 +270,8 @@ def main():
 
     new_data, new_id = sCollToLength(test_data, test_term_id_name)
 
+    print(src_coll)
+    print(src_names)
     print(new_data)
     print(new_id)
 
