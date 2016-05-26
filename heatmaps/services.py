@@ -23,7 +23,7 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
-from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png
+from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength
 from .scigraph_client import Graph, Vocabulary
 
 
@@ -822,7 +822,7 @@ class heatmap_service(database_service):
                  'json':'application/json',
                  'png':'image/png'}
 
-    collTerms = None,
+    collTerms = None, 'collapse terms by character number'
     collSources = None, 'collapse views to sources', 'collapse names to sources'
 
     def __init__(self, summary_server):
@@ -1313,17 +1313,22 @@ class heatmap_service(database_service):
         if collTerms == 'cheese':
             term_coll_function = lambda heatmap_data, term_id_name_dict: heatmap_data, term_id_name_dict
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
+        elif collTerms == 'collapse terms by character number':
+            term_coll_function = sCollToLength
+            term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
         else:
             term_coll_function = None
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
 
         if term_coll_function:
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
+            """
             if idSortSources not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
                 idSortSources = idSortSources.rsplit('-',1)[0]
                 if idSortSources not in term_id_coll_dict:
                     embed()
                     raise NameError('Identifier %s unknown!' % idSortSources)
+            """
         else:
             term_id_coll_dict = None
 
@@ -1351,6 +1356,7 @@ class heatmap_service(database_service):
             heatmap_data = applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
 
         if src_id_coll_dict:
+            print(src_id_coll_dict)
             heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
 
         #FIXME PROBLEMS KIDS
