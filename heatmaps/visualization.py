@@ -58,7 +58,7 @@ def sCollapseToSrcId(keys, id_name_dict):
 def sCollTemplate(old_keys, *args):
     return key_collections_dict, new_id_name_dict
 
-def sColllToLength(keys, id_name_dict):
+def sCollToLength(keys, id_name_dict):
     """
     Collapse keys based on length of terms. Doesn't not include 'total' key. 
 
@@ -268,7 +268,7 @@ def main():
 
     src_coll, src_names = sCollapseToSrcId(test_data['total'], test_src_id_name)
 
-    new_data, new_id = sColllToLength(test_data, test_term_id_name)
+    new_data, new_id = sCollToLength(test_data, test_term_id_name)
 
     print(new_data)
     print(new_id)
