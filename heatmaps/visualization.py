@@ -58,6 +58,29 @@ def sCollapseToSrcId(keys, id_name_dict):
 def sCollTemplate(old_keys, *args):
     return key_collections_dict, new_id_name_dict
 
+def sColllToLength(keys, id_name_dict):
+    """
+    Collapse keys based on length of terms. Doesn't not include 'total' key. 
+
+    Input: 
+    -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}}
+    -id_name_dict: a dictionary with term#s (Strings) as keys and term name (Strings) as values. Example: {"term1": "mang0"}
+
+    Output:
+    -key_collections_dict: a dictionary with term length (integer) as keys and a set of sources as values. Example: {5: {src3-2, src3-1}}
+    -new_id_name_dict: a dictionary with term length as keys and a set of term#s as values. Example: {5: {"term1"}}
+    """
+    key_collections_dict = defaultdict(set)
+    new_id_name_dict = defaultdict(set)
+    for key in keys:
+        if key == 'total':
+            continue
+        parent_key = len(id_name_dict[key])
+        for innerKey in keys[key]:
+            key_collections_dict[parent_key].add(innerKey)
+        new_id_name_dict[parent_key].add(key)
+    return dict(key_collections_dict), dict(new_id_name_dict)
+
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
         NOTE: keys not mapped will be DROPPED
@@ -244,6 +267,11 @@ def main():
     term_names = {'term':'bob-phil', 'term3':'ted'}
 
     src_coll, src_names = sCollapseToSrcId(test_data['total'], test_src_id_name)
+
+    new_data, new_id = sColllToLength(test_data, test_term_id_name)
+
+    print(new_data)
+    print(new_id)
 
     dc, to, so = heatmap_data_processing(test_data, term_coll, src_coll, TOTAL_KEY='total')
 

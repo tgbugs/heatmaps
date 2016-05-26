@@ -822,7 +822,7 @@ class heatmap_service(database_service):
                  'json':'application/json',
                  'png':'image/png'}
 
-    collTerms = None,
+    collTerms = None, 'collapse terms by character number'
     collSources = None, 'collapse views to sources', 'collapse names to sources'
 
     def __init__(self, summary_server):
@@ -1312,6 +1312,9 @@ class heatmap_service(database_service):
         # terms
         if collTerms == 'cheese':
             term_coll_function = lambda heatmap_data, term_id_name_dict: heatmap_data, term_id_name_dict
+            term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
+        elif collTerms == 'collapse terms by character number':
+            term_coll_function = sColllToLength
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
         else:
             term_coll_function = None
