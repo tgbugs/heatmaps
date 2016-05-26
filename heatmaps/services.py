@@ -1322,6 +1322,8 @@ class heatmap_service(database_service):
 
         if term_coll_function:
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
+            
+"""
             if idSortSources not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
                 idSortSources = idSortSources.rsplit('-',1)[0]
                 if idSortSources not in term_id_coll_dict:
@@ -1329,6 +1331,7 @@ class heatmap_service(database_service):
                     raise NameError('Identifier %s unknown!' % idSortSources)
         else:
             term_id_coll_dict = None
+"""
 
         # sources
         if collSources == 'cheese':
