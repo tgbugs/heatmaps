@@ -1321,6 +1321,8 @@ class heatmap_service(database_service):
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
 
         if term_coll_function:
+            print(heatmap_data)
+            print(term_id_name_dict)
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
             if idSortSources != None:
                 for idSortSource in idSortSources:
