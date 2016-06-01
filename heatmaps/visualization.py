@@ -77,7 +77,7 @@ def sCollToLength(keys, *args):
         parent_key = len(id_name_dict[key])
         for innerKey in keys[key]:
             key_collections_dict[parent_key].add(innerKey)
-    return dict(key_collections_dict), *args
+    return dict(key_collections_dict), args
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
