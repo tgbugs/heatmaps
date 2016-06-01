@@ -92,14 +92,16 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
     """
     #FIXME inefficient for single terms with no collapse
     output = {}
-    """
     if term_axis:
         for new_term, collection in key_collections_dict.items():
             new_term_counts = defaultdict(lambda :0)
             for term in collection:
-                counts_dict = heatmap_data[term].items()
-                for source, count in counts_dict:
-                    new_term_counts[source] += count
+                try:
+                    counts_dict = heatmap_data[term].items()
+                    for source, count in counts_dict:
+                        new_term_counts[source] += count
+                except KeyError:
+                    print(term + " doesn't exist in the heapmap data! D:")
             output[new_term] = dict(new_term_counts)
     else:  # default to collapse sources (the inner collection)
         for term, counts_dict in heatmap_data.items():
@@ -109,17 +111,6 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
                     if source in counts_dict:
                         new_counts_dict[new_source] += counts_dict[source]
             output[term] = dict(new_counts_dict)
-<<<<<<< HEAD
-    """
-    for term, counts_dict in heatmap_data.items():
-        new_counts_dict = defaultdict(lambda :0)
-        for new_source, collection in key_collections_dict.items():
-            for source in collection:
-                if source in counts_dict:
-                    new_counts_dict[new_source] += counts_dict[source]
-        output[term] = dict(new_counts_dict)
-=======
->>>>>>> cf71daec06c5e2add1c56e62c23d60aa0dba7848
     return output
 
 def apply_order(dict_, key_order):
