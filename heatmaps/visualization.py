@@ -91,6 +91,7 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
     #FIXME inefficient for single terms with no collapse
     output = {}
     if term_axis:
+        return key_collections_dict
         for new_term, collection in key_collections_dict.items():
             new_term_counts = defaultdict(lambda :0)
             for term in collection:
