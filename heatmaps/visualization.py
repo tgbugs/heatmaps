@@ -58,7 +58,7 @@ def sCollapseToSrcId(keys, id_name_dict):
 def sCollTemplate(old_keys, *args):
     return key_collections_dict, new_id_name_dict
 
-def sCollToLength(keys, *args):
+def sCollToLength(keys, id_name_dict):
     """
     Collapse keys based on length of terms. Doesn't not include 'total' key. 
 
@@ -71,13 +71,15 @@ def sCollToLength(keys, *args):
     -new_id_name_dict: a dictionary with term length as keys and a set of term#s as values. Example: {5: {"term1"}}
     """
     key_collections_dict = defaultdict(set)
+    new_id_name_dict = {}
     for key in keys:
         if key == 'total':
             continue
         parent_key = len(key)
         for innerKey in keys[key]:
             key_collections_dict[parent_key].add(innerKey)
-    return dict(key_collections_dict), args
+        new_id_name_dict[key] = parent_key
+    return dict(key_collections_dict), new_id_name_dict
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
@@ -92,7 +94,6 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
     output = {}
     """
     if term_axis:
-        return key_collections_dict
         for new_term, collection in key_collections_dict.items():
             new_term_counts = defaultdict(lambda :0)
             for term in collection:
@@ -108,6 +109,7 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
                     if source in counts_dict:
                         new_counts_dict[new_source] += counts_dict[source]
             output[term] = dict(new_counts_dict)
+<<<<<<< HEAD
     """
     for term, counts_dict in heatmap_data.items():
         new_counts_dict = defaultdict(lambda :0)
@@ -116,6 +118,8 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
                 if source in counts_dict:
                     new_counts_dict[new_source] += counts_dict[source]
         output[term] = dict(new_counts_dict)
+=======
+>>>>>>> cf71daec06c5e2add1c56e62c23d60aa0dba7848
     return output
 
 def apply_order(dict_, key_order):
