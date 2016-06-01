@@ -58,7 +58,7 @@ def sCollapseToSrcId(keys, id_name_dict):
 def sCollTemplate(old_keys, *args):
     return key_collections_dict, new_id_name_dict
 
-def sCollToLength(keys, id_name_dict):
+def sCollToLength(keys, *args):
     """
     Collapse keys based on length of terms. Doesn't not include 'total' key. 
 
@@ -71,15 +71,13 @@ def sCollToLength(keys, id_name_dict):
     -new_id_name_dict: a dictionary with term length as keys and a set of term#s as values. Example: {5: {"term1"}}
     """
     key_collections_dict = defaultdict(set)
-    new_id_name_dict = defaultdict(set)
     for key in keys:
         if key == 'total':
             continue
         parent_key = len(id_name_dict[key])
         for innerKey in keys[key]:
             key_collections_dict[parent_key].add(innerKey)
-        new_id_name_dict[parent_key].add(key)
-    return dict(new_id_name_dict), dict(key_collections_dict)
+    return dict(key_collections_dict), *args
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
