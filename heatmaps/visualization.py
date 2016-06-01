@@ -74,7 +74,7 @@ def sCollToLength(keys, *args):
     for key in keys:
         if key == 'total':
             continue
-        parent_key = len(id_name_dict[key])
+        parent_key = len(key)
         for innerKey in keys[key]:
             key_collections_dict[parent_key].add(innerKey)
     return dict(key_collections_dict), args
