@@ -1180,7 +1180,11 @@ class heatmap_service(database_service):
         term_name_order = list(term_name_order)
         term_id_order = list(term_id_order)
         # remove the total term name from the name order list
-        assert term_name_order.pop(term_id_order.index(TOTAL_TERM_ID)) == TOTAL_TERM_ID_NAME, "WHOOPS"
+        try:
+            term_name_order.remove(TOTAL_TERM_ID)
+        except error:
+            print("Total Term ID does not exist in the list")
+        #assert term_name_order.pop(term_id_order.index(TOTAL_TERM_ID)) == TOTAL_TERM_ID_NAME, "WHOOPS"
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
         limit = 1000
         if len(matrix) > limit:
@@ -1296,7 +1300,7 @@ class heatmap_service(database_service):
             Provide a single API for all output types.
         """
         if filetype not in self.output_map:
-            return None, "Unsupportred filetype!", None
+            return None, "Unsupported filetype!", None
         else:
             output_function = self.output_map[filetype]
 
@@ -1322,13 +1326,13 @@ class heatmap_service(database_service):
 
         if term_coll_function:
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
-            """
-            if idSortSources not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
-                idSortSources = idSortSources.rsplit('-',1)[0]
-                if idSortSources not in term_id_coll_dict:
-                    embed()
-                    raise NameError('Identifier %s unknown!' % idSortSources)
-            """
+            if idSortSources != None:
+                for idSortSource in idSortSources:
+                    if idSortSource not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
+                        idSortSource = idSortSource.rsplit('-',1)[0]
+                        if idSortSource not in term_id_coll_dict:
+                            embed()
+                            raise NameError('Identifier %s unknown!' % idSortSource)
         else:
             term_id_coll_dict = None
 
@@ -1356,7 +1360,6 @@ class heatmap_service(database_service):
             heatmap_data = applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
 
         if src_id_coll_dict:
-            print(src_id_coll_dict)
             heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
 
         #FIXME PROBLEMS KIDS

@@ -71,15 +71,15 @@ def sCollToLength(keys, id_name_dict):
     -new_id_name_dict: a dictionary with term length as keys and a set of term#s as values. Example: {5: {"term1"}}
     """
     key_collections_dict = defaultdict(set)
-    new_id_name_dict = defaultdict(set)
+    new_id_name_dict = {}
     for key in keys:
         if key == 'total':
             continue
-        parent_key = len(id_name_dict[key])
+        parent_key = len(key)
         for innerKey in keys[key]:
             key_collections_dict[parent_key].add(innerKey)
-        new_id_name_dict[parent_key].add(key)
-    return dict(new_id_name_dict), dict(key_collections_dict)
+        new_id_name_dict[key] = parent_key
+    return dict(key_collections_dict), new_id_name_dict
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
@@ -96,9 +96,12 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
         for new_term, collection in key_collections_dict.items():
             new_term_counts = defaultdict(lambda :0)
             for term in collection:
-                counts_dict = heatmap_data[term].items()
-                for source, count in counts_dict:
-                    new_term_counts[source] += count
+                try:
+                    counts_dict = heatmap_data[term].items()
+                    for source, count in counts_dict:
+                        new_term_counts[source] += count
+                except KeyError:
+                    print(term + " doesn't exist in the heapmap data! D:")
             output[new_term] = dict(new_term_counts)
     else:  # default to collapse sources (the inner collection)
         for term, counts_dict in heatmap_data.items():
@@ -108,7 +111,20 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
                     if source in counts_dict:
                         new_counts_dict[new_source] += counts_dict[source]
             output[term] = dict(new_counts_dict)
-
+<<<<<<< HEAD
+<<<<<<< HEAD
+    """
+    for term, counts_dict in heatmap_data.items():
+        new_counts_dict = defaultdict(lambda :0)
+        for new_source, collection in key_collections_dict.items():
+            for source in collection:
+                if source in counts_dict:
+                    new_counts_dict[new_source] += counts_dict[source]
+        output[term] = dict(new_counts_dict)
+=======
+>>>>>>> cf71dae... Tweaking back and forth
+=======
+>>>>>>> 25c0a89... Modified applyCollapse so it doesn't error out if heatmap doesn't have a term
     return output
 
 def apply_order(dict_, key_order):
