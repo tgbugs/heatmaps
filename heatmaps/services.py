@@ -1290,13 +1290,13 @@ class heatmap_service(database_service):
 
 
     def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,  # FIXME probably want to convert the Nones for sorts to lists?
-               collTerms=None, collSources=None, idSortTerms=None, idSortSources=None,
+               collTerms=None, collSources=None, idSortTerms=None, idSortSources=[],
                ascTerms=True, ascSources=True):
         """
             Provide a single API for all output types.
         """
         if filetype not in self.output_map:
-            return None, "Unsupportred filetype!", None
+            return None, "Unsupported filetype!", None
         else:
             output_function = self.output_map[filetype]
 
@@ -1322,13 +1322,12 @@ class heatmap_service(database_service):
 
         if term_coll_function:
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
-            """
-            if idSortSources not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
-                idSortSources = idSortSources.rsplit('-',1)[0]
-                if idSortSources not in term_id_coll_dict:
-                    embed()
-                    raise NameError('Identifier %s unknown!' % idSortSources)
-            """
+            for idSortSource in idSortSources:
+                if idSortSources not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
+                    idSortSources = idSortSources.rsplit('-',1)[0]
+                    if idSortSources not in term_id_coll_dict:
+                        embed()
+                        raise NameError('Identifier %s unknown!' % idSortSources)
         else:
             term_id_coll_dict = None
 

@@ -72,7 +72,7 @@ def sCollToLength(keys, *args):
     """
     key_collections_dict = defaultdict(set)
     for key in keys:
-        if key == 'total' or key == 'federation_totals':
+        if key == 'total':
             continue
         parent_key = len(key)
         for innerKey in keys[key]:
