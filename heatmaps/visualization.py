@@ -90,6 +90,7 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
     """
     #FIXME inefficient for single terms with no collapse
     output = {}
+    """
     if term_axis:
         return key_collections_dict
         for new_term, collection in key_collections_dict.items():
@@ -107,7 +108,14 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
                     if source in counts_dict:
                         new_counts_dict[new_source] += counts_dict[source]
             output[term] = dict(new_counts_dict)
-
+    """
+    for term, counts_dict in heatmap_data.items():
+        new_counts_dict = defaultdict(lambda :0)
+        for new_source, collection in key_collections_dict.items():
+            for source in collection:
+                if source in counts_dict:
+                    new_counts_dict[new_source] += counts_dict[source]
+        output[term] = dict(new_counts_dict)
     return output
 
 def apply_order(dict_, key_order):
