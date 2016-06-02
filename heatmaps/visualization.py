@@ -21,10 +21,12 @@ def sCollapseToSrcName(keys, id_name_dict):
     """
         Collapse sources that have the same name.
     """
-    
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
     for key in keys:
+        if key not in id_name_dict:
+            print(key + " is not in this dict")
+            continue
         name = id_name_dict[key]
         key_collections_dict[name].add(key)
         if name not in new_id_name_dict:
@@ -41,10 +43,12 @@ def sCollapseToSrcId(keys, id_name_dict):
         but that mapping is a bit harder since I'd need to map the base id to 
         the name they have in common... maybe that is better?
     """
-    
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
     for key in keys:
+        if key not in id_name_dict:
+            print(key + " is not in dict")
+            continue
         parent_key = key.rsplit('-',1)[0]
         key_collections_dict[parent_key].add(key)
         if parent_key not in new_id_name_dict:
@@ -64,20 +68,17 @@ def sCollToLength(keys, id_name_dict):
 
     Input: 
     -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}}
-    -id_name_dict: a dictionary with term#s (Strings) as keys and term name (Strings) as values. Example: {"term1": "mang0"}
+    -id_name_dict: a dictionary with term#s (Strings) as keys and term name (Strings) as values. Example: {"term1": "hbox"}
 
     Output:
-    -key_collections_dict: a dictionary with term length (integer) as keys and a set of sources as values. Example: {5: {src3-2, src3-1}}
-    -new_id_name_dict: a dictionary with term length as keys and a set of term#s as values. Example: {5: {"term1"}}
+    -key_collections_dict: a dictionary with term length (integer) as keys and terms as values. Example: {4: {"term1", "term2"}}
+    -new_id_name_dict: a dictionary with term lengths as keys and terms as values. Example: {4: "hbox"}
     """
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
     for key in keys:
-        if key == 'total':
-            continue
         parent_key = len(key)
-        for innerKey in keys[key]:
-            key_collections_dict[parent_key].add(innerKey)
+        key_collections_dict[parent_key].add(key)
         new_id_name_dict[key] = parent_key
     return dict(key_collections_dict), new_id_name_dict
 
@@ -93,16 +94,13 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
     #FIXME inefficient for single terms with no collapse
     output = {}
     if term_axis:
-        for new_term, collection in key_collections_dict.items():
-            new_term_counts = defaultdict(lambda :0)
-            for term in collection:
-                try:
-                    counts_dict = heatmap_data[term].items()
-                    for source, count in counts_dict:
-                        new_term_counts[source] += count
-                except KeyError:
-                    print(term + " doesn't exist in the heapmap data! D:")
-            output[new_term] = dict(new_term_counts)
+        for term_size, terms in key_collections_dict.items():
+            new_counts_dict = defaultdict(lambda :0)
+            for term in terms:
+                source_dict_for_term = heatmap_data[term]
+                for source, count in source_dict_for_term.items():
+                    new_counts_dict[source] += count
+            output[term_size] = dict(new_counts_dict)
     else:  # default to collapse sources (the inner collection)
         for term, counts_dict in heatmap_data.items():
             new_counts_dict = defaultdict(lambda :0)
@@ -140,11 +138,12 @@ def apply_order(dict_, key_order):
             ordered.append(None)  # convert to zero later for numerical
     return  ordered
                         
-def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *args, exclude_tt=False):
+def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *args, termCollapseMethod='', exclude_tt=False):
     """ given heatmap data, and orders on sources and terms
         return a matrix representation
     """
     #sanity check
+    """
     if len(tdict_sdict) < len(term_id_order):  # term_ids can be a subset!
         # note that we *could* allow empty terms in the dict but that should
         # be handled elsewhere
@@ -153,16 +152,28 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
     if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_id_order):  # these must match
         embed()
         raise IndexError("Source orders must match the total source counts!")
-
+    """
     if exclude_tt:
         tdict_sdict.pop(TOTAL_TERM_ID)
         term_id_order = list(term_id_order)
         term_id_order.remove(TOTAL_TERM_ID)
-
-    matrix = np.empty((len(term_id_order), len(src_id_order)))
-    for i, term in enumerate(term_id_order):
-        row = apply_order(tdict_sdict[term], src_id_order)
-        matrix[i,:] = row
+    
+    matrix = np.empty((len(tdict_sdict.keys()), len(src_id_order)))
+    if termCollapseMethod == 'collapse terms by character number':
+        i = 0
+        for termLength in tdict_sdict.keys():
+            row = apply_order(tdict_sdict[termLength], src_id_order)
+            matrix[i,:] = row
+            i += 1
+        """
+        for i, term in enumerate(term_id_order):
+            row = apply_order(tdict_sdict[len(term)], src_id_order)
+            matrix[i,:] = row
+        """
+    else:
+        for i, term in enumerate(term_id_order):
+            row = apply_order(tdict_sdict[term], src_id_order)
+            matrix[i,:] = row
 
     return np.nan_to_num(matrix)
 
