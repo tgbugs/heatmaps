@@ -1180,11 +1180,12 @@ class heatmap_service(database_service):
         term_name_order = list(term_name_order)
         term_id_order = list(term_id_order)
         # remove the total term name from the name order list
-        try:
-            term_name_order.remove(TOTAL_TERM_ID)
-        except error:
-            print("Total Term ID does not exist in the list")
-        #assert term_name_order.pop(term_id_order.index(TOTAL_TERM_ID)) == TOTAL_TERM_ID_NAME, "WHOOPS"
+        #try:
+        #    term_name_order.remove("17")
+        #except ValueError:
+        #    print("Total Term ID does not exist in the list")
+        popped_term = term_name_order.pop(term_id_order.index(17) #TOTAL_TERM_ID))
+        #assert popped_term == TOTAL_TERM_ID_NAME, popped_term
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
         limit = 1000
         if len(matrix) > limit:

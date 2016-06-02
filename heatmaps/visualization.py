@@ -64,20 +64,17 @@ def sCollToLength(keys, id_name_dict):
 
     Input: 
     -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}}
-    -id_name_dict: a dictionary with term#s (Strings) as keys and term name (Strings) as values. Example: {"term1": "mang0"}
+    -id_name_dict: a dictionary with term#s (Strings) as keys and term name (Strings) as values. Example: {"term1": "hbox"}
 
     Output:
-    -key_collections_dict: a dictionary with term length (integer) as keys and a set of sources as values. Example: {5: {src3-2, src3-1}}
-    -new_id_name_dict: a dictionary with term length as keys and a set of term#s as values. Example: {5: {"term1"}}
+    -key_collections_dict: a dictionary with term length (integer) as keys and terms as values. Example: {4: {"term1", "term2"}}
+    -new_id_name_dict: a dictionary with term lengths as keys and terms as values. Example: {4: "hbox"}
     """
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
     for key in keys:
-        if key == 'total':
-            continue
         parent_key = len(key)
-        for innerKey in keys[key]:
-            key_collections_dict[parent_key].add(innerKey)
+        key_collections_dict[parent_key].add(key)
         new_id_name_dict[key] = parent_key
     return dict(key_collections_dict), new_id_name_dict
 
@@ -93,16 +90,13 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
     #FIXME inefficient for single terms with no collapse
     output = {}
     if term_axis:
-        for new_term, collection in key_collections_dict.items():
-            new_term_counts = defaultdict(lambda :0)
-            for term in collection:
-                try:
-                    counts_dict = heatmap_data[term].items()
-                    for source, count in counts_dict:
-                        new_term_counts[source] += count
-                except KeyError:
-                    print(term + " doesn't exist in the heapmap data! D:")
-            output[new_term] = dict(new_term_counts)
+        for term_size, terms in key_collections_dict.items():
+            new_counts_dict = defaultdict(lambda :0)
+            for term in terms:
+                source_dict_for_term = heatmap_data[term]
+                for source, count in source_dict_for_term.items():
+                    new_counts_dict[source] += count
+            output[term_size] = dict(new_counts_dict)
     else:  # default to collapse sources (the inner collection)
         for term, counts_dict in heatmap_data.items():
             new_counts_dict = defaultdict(lambda :0)
