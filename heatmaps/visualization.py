@@ -120,11 +120,12 @@ def apply_order(dict_, key_order):
             ordered.append(None)  # convert to zero later for numerical
     return  ordered
                         
-def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *args, exclude_tt=False):
+def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *args, termCollapseMethod='', exclude_tt=False):
     """ given heatmap data, and orders on sources and terms
         return a matrix representation
     """
     #sanity check
+    """
     if len(tdict_sdict) < len(term_id_order):  # term_ids can be a subset!
         # note that we *could* allow empty terms in the dict but that should
         # be handled elsewhere
@@ -133,16 +134,21 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
     if len(tdict_sdict[TOTAL_TERM_ID]) != len(src_id_order):  # these must match
         embed()
         raise IndexError("Source orders must match the total source counts!")
-
+    """
     if exclude_tt:
         tdict_sdict.pop(TOTAL_TERM_ID)
         term_id_order = list(term_id_order)
         term_id_order.remove(TOTAL_TERM_ID)
-
+    
     matrix = np.empty((len(term_id_order), len(src_id_order)))
-    for i, term in enumerate(term_id_order):
-        row = apply_order(tdict_sdict[term], src_id_order)
-        matrix[i,:] = row
+    if termCollapseMethod == 'collapse terms by character number':
+        for i, term in enumerate(term_id_order):
+            row = apply_order(tdict_sdict[len(term)], src_id_order)
+            matrix[i,:] = row
+    else:
+        for i, term in enumerate(term_id_order):
+            row = apply_order(tdict_sdict[term], src_id_order)
+            matrix[i,:] = row
 
     return np.nan_to_num(matrix)
 
