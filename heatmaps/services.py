@@ -1200,7 +1200,15 @@ class heatmap_service(database_service):
         if title.endswith('.png'):
             title = title[:-4]
 
-        row_names = term_name_order
+        row_names2 = []
+        for item in term_name_order:
+            if item not in row_names2:
+                row_names2.append(item)
+        row_names = []
+        while len(row_names2) != 0:
+            row_names.append(row_names2.pop(row_names2.index(min(row_names2))))
+        
+        #row_names = term_name_order
         col_names = src_name_order
         destdir = '/tmp/'
         future = self.ppe.submit(make_png, matrix, row_names, col_names, title, destdir, poster=False, async=True)

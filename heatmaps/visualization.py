@@ -21,7 +21,7 @@ def sCollapseToSrcName(keys, id_name_dict):
     """
         Collapse sources that have the same name.
     """
-    
+    print(id_name_dict)
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
     for key in keys:
@@ -140,11 +140,18 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
         term_id_order = list(term_id_order)
         term_id_order.remove(TOTAL_TERM_ID)
     
-    matrix = np.empty((len(term_id_order), len(src_id_order)))
+    matrix = np.empty((len(tdict_sdict.keys()), len(src_id_order)))
     if termCollapseMethod == 'collapse terms by character number':
+        i = 0
+        for termLength in tdict_sdict.keys():
+            row = apply_order(tdict_sdict[termLength], src_id_order)
+            matrix[i,:] = row
+            i += 1
+        """
         for i, term in enumerate(term_id_order):
             row = apply_order(tdict_sdict[len(term)], src_id_order)
             matrix[i,:] = row
+        """
     else:
         for i, term in enumerate(term_id_order):
             row = apply_order(tdict_sdict[term], src_id_order)
