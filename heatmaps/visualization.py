@@ -21,10 +21,12 @@ def sCollapseToSrcName(keys, id_name_dict):
     """
         Collapse sources that have the same name.
     """
-    print(id_name_dict)
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
     for key in keys:
+        if key not in id_name_dict:
+            print(key + " is not in this dict")
+            continue
         name = id_name_dict[key]
         key_collections_dict[name].add(key)
         if name not in new_id_name_dict:
@@ -41,10 +43,12 @@ def sCollapseToSrcId(keys, id_name_dict):
         but that mapping is a bit harder since I'd need to map the base id to 
         the name they have in common... maybe that is better?
     """
-    
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
     for key in keys:
+        if key not in id_name_dict:
+            print(key + " is not in dict")
+            continue
         parent_key = key.rsplit('-',1)[0]
         key_collections_dict[parent_key].add(key)
         if parent_key not in new_id_name_dict:
