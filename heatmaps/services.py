@@ -1179,14 +1179,7 @@ class heatmap_service(database_service):
     def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, *args, title='heatmap', **kwargs):
         term_name_order = list(term_name_order)
         term_id_order = list(term_id_order)
-        # remove the total term name from the name order list
-        if termCollapseMethod == 'collapse terms by character number':
-            term_name_order.remove(17)
-            heatmap_data.pop(17)
-        else:
-            term_name_order.remove(TOTAL_TERM_ID_NAME)
-            heatmap_data.pop(TOTAL_TERM_ID)
-        term_id_order.remove(TOTAL_TERM_ID)
+
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, termCollapseMethod=termCollapseMethod)
         limit = 1000
         if len(matrix) > limit:
@@ -1385,6 +1378,17 @@ class heatmap_service(database_service):
 
         # TODO testing the double_sort, it works, need to update the output api to accomodate it
         #term_id_order, term_name_order = self.double_sort('identifier', 'frequency', heatmap_data, None, 'nlx_82958', ascTerms, 0, term_id_name_dict)
+
+        if filetype == "png":
+            term_name_order = list(term_name_order)
+            term_id_order = list(term_id_order)
+            if collTerms == 'collapse terms by character number':
+                term_name_order.remove(17)
+                heatmap_data.pop(17)
+            else:
+                term_name_order.remove(TOTAL_TERM_ID_NAME)
+                heatmap_data.pop(TOTAL_TERM_ID)
+            term_id_order.remove(TOTAL_TERM_ID)
 
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, title=filename)
 
