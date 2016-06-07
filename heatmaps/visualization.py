@@ -6,6 +6,8 @@ import pylab as plt
 
 from IPython import embed
 
+from ../../pyonutils-master/hierarchies.py import *
+
 def discretize(data_matrix):
     bins = [0,1,10,100]
     vals = [None,1,2,3]
