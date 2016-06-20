@@ -1328,7 +1328,7 @@ class heatmap_service(database_service):
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
         
         if filetype == "png":
-            heatmap_data.pop(TOTAL_TERM_ID)
+            #heatmap_data.pop(TOTAL_TERM_ID)
             term_id_name_dict.pop(TOTAL_TERM_ID)
 
         if term_coll_function:
