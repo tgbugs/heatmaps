@@ -1349,7 +1349,8 @@ class heatmap_service(database_service):
                 if key == TOTAL_TERM_ID:
                     continue
                 source = heatmap_data[key]
-                result[source] = self.get_name_from_id(source)
+                for id_ in source:
+                    result[id_] = ' '.join(self.get_name_from_id(id_))
             return result
 
         # sources
