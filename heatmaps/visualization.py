@@ -6,7 +6,7 @@ import pylab as plt
 
 from IPython import embed
 
-from ../../pyonutils-master/hierarchies.py import *
+from ../../pyonutils-master/hierarchies.py import creatTree
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -74,7 +74,7 @@ def sCollToLength(keys, id_name_dict):
 
     Output:
     -key_collections_dict: a dictionary with term length (integer) as keys and terms as values. Example: {4: {"term1", "term2"}}
-    -new_id_name_dict: a dictionary with term lengths as keys and terms as values. Example: {4: "hbox"}
+    -new_id_name_dict: a dictionary with term as keys and term lengths as values. Example: {"hbox": 4}
     """
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
@@ -85,8 +85,25 @@ def sCollToLength(keys, id_name_dict):
     return dict(key_collections_dict), new_id_name_dict
 
 def sCollByTermParent(keys, id_name_dict):
-    key_collections_dic = defaultdict(set)
+    """
+    Inputs: 
+    -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}, "term2": {src2-1, src2-0}}
+    -id_name_dict: a dictionary with term#s (Strings) as keys and term name (Strings) as values. Example: {"term1": "hbox", "term2": "mang0"}
+
+    Outputs:
+    -key_collections_dict
+    """
+    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
+
+    key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
+
+    # current strategy: gather all the terms in a list, find root, make tree from root...
+    listOfTerms = []
+    for key in id_name_dict:
+        listOfTerms.append(id_name_dict[key])
+
+    tree, extra = creatTree()
 
     return dict(key_collections_dict), new_id_name_dict
 
