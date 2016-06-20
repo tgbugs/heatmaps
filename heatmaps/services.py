@@ -1327,12 +1327,13 @@ class heatmap_service(database_service):
             term_coll_function = None
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
         
+        heatmap_data_copy = heatmap_data
         if filetype == "png":
-            heatmap_data.pop(TOTAL_TERM_ID)
+            heatmap_data_copy.pop(TOTAL_TERM_ID)
             term_id_name_dict.pop(TOTAL_TERM_ID)
 
         if term_coll_function:
-            term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
+            term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)
             if idSortSources != None:
                 for idSortSource in idSortSources:
                     if idSortSource not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
@@ -1359,22 +1360,13 @@ class heatmap_service(database_service):
             src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
         elif collSources == 'collapse views to sources':
             src_coll_function = sCollapseToSrcId
-            if filetype == "png":
-                src_id_name_dict = makeSrcIDNameDict()
-            else: 
-                src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+            src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         elif collSources == 'collapse names to sources':
             src_coll_function = sCollapseToSrcName
-            if filetype == "png":
-                src_id_name_dict = makeSrcIDNameDict()
-            else:
-                src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+            src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         else:
             src_coll_function = None
-            if filetype == "png":
-                src_id_name_dict = makeSrcIDNameDict()
-            else:
-                src_id_name_dict = {id_:' '.join(self.get_name_from_id(id_)) for id_ in heatmap_data[TOTAL_TERM_ID]}
+            src_id_name_dict = {id_:' '.join(self.get_name_from_id(id_)) for id_ in heatmap_data[TOTAL_TERM_ID]}
 
         if src_coll_function:
             src_id_coll_dict, src_id_name_dict = src_coll_function(heatmap_data[TOTAL_TERM_ID], src_id_name_dict)
