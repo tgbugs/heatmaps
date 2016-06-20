@@ -1359,10 +1359,16 @@ class heatmap_service(database_service):
             src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
         elif collSources == 'collapse views to sources':
             src_coll_function = sCollapseToSrcId
-            src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+            if filetype == "png":
+                src_id_name_dict = makeSrcIDNameDict()
+            else: 
+                src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         elif collSources == 'collapse names to sources':
             src_coll_function = sCollapseToSrcName
-            src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+            if filetype == "png":
+                src_id_name_dict = makeSrcIDNameDict()
+            else:
+                src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         else:
             src_coll_function = None
             if filetype == "png":
