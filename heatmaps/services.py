@@ -1329,7 +1329,7 @@ class heatmap_service(database_service):
         
         if filetype == "png":
             heatmap_data.pop(TOTAL_TERM_ID)
-            term_id_name_dict.remove(TOTAL_TERM_ID_NAME)
+            term_id_name_dict.pop(TOTAL_TERM_ID_NAME)
 
         if term_coll_function:
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
@@ -1393,7 +1393,7 @@ class heatmap_service(database_service):
                 heatmap_data.pop(TOTAL_TERM_ID)
             term_id_order.remove(TOTAL_TERM_ID)
         """
-        
+
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, title=filename)
 
         return representation, filename, mimetype
