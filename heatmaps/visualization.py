@@ -44,6 +44,12 @@ def sCollapseToSrcId(keys, id_name_dict):
         Collapse sources that have the same base view identifier
         but that mapping is a bit harder since I'd need to map the base id to 
         the name they have in common... maybe that is better?
+
+    Inputs: 
+    -keys: a set of sources
+    -id_name_dict:
+
+    Outputs:
     """
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
@@ -75,13 +81,14 @@ def sCollToLength(keys, id_name_dict):
     Output:
     -key_collections_dict: a dictionary with term length (integer) as keys and terms as values. Example: {4: {"term1", "term2"}}
     -new_id_name_dict: a dictionary with term as keys and term lengths as values. Example: {"hbox": 4}
+    {4: {"hbox"}}
     """
     key_collections_dict = defaultdict(set)
-    new_id_name_dict = {}
+    new_id_name_dict = defaultdict(set)
     for key in keys:
         parent_key = len(key)
         key_collections_dict[parent_key].add(key)
-        new_id_name_dict[key] = parent_key
+        new_id_name_dict[parent_key].add(key)
     return dict(key_collections_dict), new_id_name_dict
 
 """
@@ -167,7 +174,7 @@ def apply_order(dict_, key_order):
             ordered.append(None)  # convert to zero later for numerical
     return  ordered
                         
-def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *args, termCollapseMethod='', exclude_tt=False):
+def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *args, exclude_tt=False):
     """ given heatmap data, and orders on sources and terms
         return a matrix representation
     """
@@ -187,23 +194,32 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
         term_id_order = list(term_id_order)
         term_id_order.remove(TOTAL_TERM_ID)
     
-    matrix = np.empty((len(tdict_sdict.keys()), len(src_id_order)))
+    matrix = np.empty((len(term_id_order), len(src_id_order)))
+    print(term_id_order)
+    #tdict_sdict.keys()
+    """
     if termCollapseMethod == 'collapse terms by character number':
         i = 0
         for termLength in tdict_sdict.keys():
             row = apply_order(tdict_sdict[termLength], src_id_order)
             matrix[i,:] = row
             i += 1
-        """
+
         for i, term in enumerate(term_id_order):
             row = apply_order(tdict_sdict[len(term)], src_id_order)
             matrix[i,:] = row
-        """
     else:
-        for i, term in enumerate(term_id_order):
-            row = apply_order(tdict_sdict[term], src_id_order)
-            matrix[i,:] = row
-
+    """
+    i = 0
+    for key in tdict_sdict.keys():
+        row = apply_order(tdict_sdict[termLength], src_id_order)
+        matrix[i,:] = row
+        i += 1
+    """
+    for i, term in enumerate(term_id_order):
+        row = apply_order(tdict_sdict[term], src_id_order)
+        matrix[i,:] = row
+    """
     return np.nan_to_num(matrix)
 
 def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termOrder=None, sourceOrder=None, TOTAL_KEY='federation_totals'):

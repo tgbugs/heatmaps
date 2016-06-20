@@ -1176,11 +1176,9 @@ class heatmap_service(database_service):
         """ return a json object with the raw data and the src_id and term_id mappings """
         return json.dumps(heatmap_data), self.mimetypes['json']
 
-    def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, *args, title='heatmap', **kwargs):
-        term_name_order = list(term_name_order)
-        term_id_order = list(term_id_order)
+    def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
 
-        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, termCollapseMethod=termCollapseMethod)
+        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         limit = 1000
         if len(matrix) > limit:
             #return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
@@ -1315,8 +1313,6 @@ class heatmap_service(database_service):
         timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
         filename = 'nif_heatmap_%s_%s.%s' % (heatmap_id, timestamp, filetype)
 
-        termCollapseMethod = collTerms
-
         # collapse rules and execution (need to go in their own function)
         # terms
         if collTerms == 'cheese':
@@ -1328,9 +1324,14 @@ class heatmap_service(database_service):
         else:
             term_coll_function = None
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
-            
+        
+        heatmap_data_copy = dict(heatmap_data)
+        if filetype == "png":
+            heatmap_data_copy.pop(TOTAL_TERM_ID)
+            term_id_name_dict.pop(TOTAL_TERM_ID)
+
         if term_coll_function:
-            term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
+            term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)
             if idSortSources != None:
                 for idSortSource in idSortSources:
                     if idSortSource not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
@@ -1340,6 +1341,16 @@ class heatmap_service(database_service):
                             raise NameError('Identifier %s unknown!' % idSortSource)
         else:
             term_id_coll_dict = None
+
+        def makeSrcIDNameDict():
+            result = {}
+            for key in heatmap_data:
+                if key == TOTAL_TERM_ID:
+                    continue
+                source = heatmap_data[key]
+                for id_ in source:
+                    result[id_] = ' '.join(self.get_name_from_id(id_))
+            return result
 
         # sources
         if collSources == 'cheese':
@@ -1362,7 +1373,7 @@ class heatmap_service(database_service):
 
         # apply the collapse dicts to the data, need to do before sorting for some sort options
         if term_id_coll_dict:
-            heatmap_data = applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
+            heatmap_data = applyCollapse(heatmap_data_copy, term_id_coll_dict, term_axis=True)
 
         if src_id_coll_dict:
             heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
@@ -1370,15 +1381,18 @@ class heatmap_service(database_service):
         #FIXME PROBLEMS KIDS
         #idSortTerms, idSortSources = idSortSources, idSortTerms
 
+        print(term_id_name_dict)
         # sort!
         term_id_order, term_name_order = self.sort(sortTerms,
-                    heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
+                    heatmap_data_copy, idSortTerms, ascTerms, 0, term_id_name_dict)
         src_id_order, src_name_order = self.sort(sortSources,
-                    heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
+                    heatmap_data_copy, idSortSources, ascSources, 1, src_id_name_dict)
 
         # TODO testing the double_sort, it works, need to update the output api to accomodate it
         #term_id_order, term_name_order = self.double_sort('identifier', 'frequency', heatmap_data, None, 'nlx_82958', ascTerms, 0, term_id_name_dict)
 
+        """
+        This code can properly collapse terms, but will not work when collapsing terms by character number AND have a 17 character term. 
         if filetype == "png":
             term_name_order = list(term_name_order)
             term_id_order = list(term_id_order)
@@ -1389,8 +1403,9 @@ class heatmap_service(database_service):
                 term_name_order.remove(TOTAL_TERM_ID_NAME)
                 heatmap_data.pop(TOTAL_TERM_ID)
             term_id_order.remove(TOTAL_TERM_ID)
+        """
 
-        representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, title=filename)
+        representation, mimetype = output_function(heatmap_data_copy, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
 
