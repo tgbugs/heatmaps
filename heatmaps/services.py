@@ -1386,6 +1386,7 @@ class heatmap_service(database_service):
             else:
                 term_name_order.remove(TOTAL_TERM_ID_NAME)
                 heatmap_data.pop(TOTAL_TERM_ID)
+            term_id_order = list(term_id_order)
             term_id_order.remove(TOTAL_TERM_ID)
 
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, title=filename)
