@@ -1177,8 +1177,6 @@ class heatmap_service(database_service):
         return json.dumps(heatmap_data), self.mimetypes['json']
 
     def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, *args, title='heatmap', **kwargs):
-        term_name_order = list(term_name_order)
-        term_id_order = list(term_id_order)
 
         matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, termCollapseMethod=termCollapseMethod)
         limit = 1000
@@ -1328,7 +1326,11 @@ class heatmap_service(database_service):
         else:
             term_coll_function = None
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
-            
+        
+        if filetype == "png":
+            heatmap_data.pop(TOTAL_TERM_ID)
+            term_id_name_dict.remove(TOTAL_TERM_ID_NAME)
+
         if term_coll_function:
             term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data, term_id_name_dict)
             if idSortSources != None:
@@ -1379,6 +1381,7 @@ class heatmap_service(database_service):
         # TODO testing the double_sort, it works, need to update the output api to accomodate it
         #term_id_order, term_name_order = self.double_sort('identifier', 'frequency', heatmap_data, None, 'nlx_82958', ascTerms, 0, term_id_name_dict)
 
+        """
         if filetype == "png":
             term_name_order = list(term_name_order)
             term_id_order = list(term_id_order)
@@ -1389,7 +1392,8 @@ class heatmap_service(database_service):
                 term_name_order.remove(TOTAL_TERM_ID_NAME)
                 heatmap_data.pop(TOTAL_TERM_ID)
             term_id_order.remove(TOTAL_TERM_ID)
-
+        """
+        
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, title=filename)
 
         return representation, filename, mimetype
