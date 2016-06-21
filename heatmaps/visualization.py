@@ -198,7 +198,7 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
     """
     i = 0
     for key in tdict_sdict.keys():
-        row = apply_order(tdict_sdict[termLength], src_id_order)
+        row = apply_order(tdict_sdict[key], src_id_order)
         matrix[i,:] = row
         i += 1
     """

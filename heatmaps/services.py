@@ -1381,12 +1381,11 @@ class heatmap_service(database_service):
         #FIXME PROBLEMS KIDS
         #idSortTerms, idSortSources = idSortSources, idSortTerms
 
-        print(term_id_name_dict)
         # sort!
         term_id_order, term_name_order = self.sort(sortTerms,
-                    heatmap_data_copy, idSortTerms, ascTerms, 0, term_id_name_dict)
+                    heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
         src_id_order, src_name_order = self.sort(sortSources,
-                    heatmap_data_copy, idSortSources, ascSources, 1, src_id_name_dict)
+                    heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
 
         # TODO testing the double_sort, it works, need to update the output api to accomodate it
         #term_id_order, term_name_order = self.double_sort('identifier', 'frequency', heatmap_data, None, 'nlx_82958', ascTerms, 0, term_id_name_dict)
@@ -1405,7 +1404,7 @@ class heatmap_service(database_service):
             term_id_order.remove(TOTAL_TERM_ID)
         """
 
-        representation, mimetype = output_function(heatmap_data_copy, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
+        representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
 
