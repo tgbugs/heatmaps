@@ -44,6 +44,12 @@ def sCollapseToSrcId(keys, id_name_dict):
         Collapse sources that have the same base view identifier
         but that mapping is a bit harder since I'd need to map the base id to 
         the name they have in common... maybe that is better?
+
+    Inputs: 
+    -keys: a set of sources
+    -id_name_dict:
+
+    Outputs:
     """
     key_collections_dict = defaultdict(set)
     new_id_name_dict = {}
@@ -190,10 +196,16 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
             matrix[i,:] = row
     else:
     """
+    i = 0
+    for key in tdict_sdict.keys():
+        row = apply_order(tdict_sdict[termLength], src_id_order)
+        matrix[i,:] = row
+        i += 1
+    """
     for i, term in enumerate(term_id_order):
         row = apply_order(tdict_sdict[term], src_id_order)
         matrix[i,:] = row
-
+    """
     return np.nan_to_num(matrix)
 
 def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termOrder=None, sourceOrder=None, TOTAL_KEY='federation_totals'):
