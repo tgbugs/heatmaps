@@ -173,7 +173,8 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
         term_id_order = list(term_id_order)
         term_id_order.remove(TOTAL_TERM_ID)
     
-    matrix = np.empty((len(tdict_sdict.keys()), len(src_id_order)))
+    matrix = np.empty((len(term_id_order), len(src_id_order)))
+    #tdict_sdict.keys()
     """
     if termCollapseMethod == 'collapse terms by character number':
         i = 0
