@@ -6,7 +6,7 @@ import pylab as plt
 
 from IPython import embed
 
-#from ../../pyonutils-master/hierarchies.py import creatTree
+from hierarchies import in_tree
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -80,8 +80,7 @@ def sCollToLength(keys, id_name_dict):
 
     Output:
     -key_collections_dict: a dictionary with term length (integer) as keys and terms as values. Example: {4: {"term1", "term2"}}
-    -new_id_name_dict: a dictionary with term as keys and term lengths as values. Example: {"hbox": 4}
-    {4: {"hbox"}}
+    -new_id_name_dict: a dictionary with term lengths as keys and a set of corresponding terms as values. Example: {4: {"hbox"}}
     """
     key_collections_dict = defaultdict(set)
     new_id_name_dict = defaultdict(set)
@@ -91,32 +90,79 @@ def sCollToLength(keys, id_name_dict):
         new_id_name_dict[parent_key].add(key)
     return dict(key_collections_dict), new_id_name_dict
 
-"""
-def sCollByTermParent(keys, id_name_dict):
-"""
-"""
+def sCollByTermParent(keys, id_name_dict, treeOutput, level):
+    """
     Inputs: 
-    -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}, "term2": {src2-1, src2-0}}
-    -id_name_dict: a dictionary with term#s (Strings) as keys and term name (Strings) as values. Example: {"term1": "hbox", "term2": "mang0"}
+    -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}, "term2": {src2-1, src2-0}, "term3": {src4-1, src4-2}}
+    -id_name_dict: a dictionary with terms (Strings) as keys and term name (Strings) as values. Example: {"term1": "hbox", "term2": "mang0", "term3": "Abate"}
+    -level: the number of levels to descend in the ontology before beginning collapse. Integer
 
     Outputs:
-    -key_collections_dict
+    -key_collections_dict: dictionary with root as keys and set of terms as values. Example: {"Top tier": {"term1", "term2"}, "Pretty good": {"term3"}}
+    -new_id_name_dict: dictionary with root as keys and term names as values. Example: {"Top tier": {"hbox", "mang0"}, "Pretty good": {"Abate"}}
     """
-"""
-    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
-
     key_collections_dict = defaultdict(set)
-    new_id_name_dict = {}
+    new_id_name_dict = defaultdict(set)
 
-    # current strategy: gather all the terms in a list, find root, make tree from root...
-    listOfTerms = []
-    for key in id_name_dict:
-        listOfTerms.append(id_name_dict[key])
+    tree, extra = treeOutput[0], treeOutput[1]
 
-    tree, extra = creatTree()
+    def findTreeLevel(tree, extra, levelsRemaining):
+        parentIdentifiers = extra[4]
+        for key in tree:
+            root = key
+        noRootTree = tree[root]
+        listOfTrees = []
+        for key in noRootTree:
+            if key not in parentIdentifiers:
+                listOfTrees.append(noRootTree[key])
+        return findTreeLevelHelper(listOfTrees, levelsRemaining - 1)
+    def findTreeLevelHelper(listOfTrees, levelsRemaining):
+        """
+        Get a list of trees that are at the requested level. 
+        """
+        if levelsRemaining == 0:
+            return listOfTrees
+        newListOfTrees = []
+        for tree in listOfTrees:
+            for key in tree:
+                root = key
+            noRootTree = tree[root]
+            for key in noRootTree:
+                child = noRootTree[key]
+                newListOfTrees.append(child)
+        return findTreeLevel(newListOfTrees, levelsRemaining - 1)
+    def filterListOfTrees(listOfTrees):
+        """
+        Ensures all the trees have the terms we want in them. 
+        Input: listOfTrees
+        Output: filteredTrees, term_to_tree (dict) (term as keys, tree index in filteredTrees as values)
+        """
+        filteredTrees = []
+        term_to_tree = {}
+        treeNumber = 0
+        for tree in listOfTrees:
+            hasATerm = False
+            for term in id_name_dict:
+                if in_tree(term, tree):
+                    hasATerm = True
+                    term_to_tree[term] = treeNumber
+            if hasATerm == True:
+                filteredTrees.append(tree)
+                treeNumber += 1
+        return filteredTrees, term_to_tree
 
-    return dict(key_collections_dict), new_id_name_dict
-    """
+    listOfTrees = findTreeLevel(tree, extra, level)
+    listOfTrees, term_to_tree = filterListOfTrees(listOfTrees)
+
+    for treeNumber, tree in enumerate(listOfTrees):
+        # get the root and save as variable "root"
+        root, restOfTree = tree.items()[0]
+        root = root[0]   # there's only one key, and it's the root
+        for term in term_to_tree.keys():
+            if term_to_tree[term] == treeNumber:
+                key_collections_dict[root].add(term)
+                new_id_name_dict[root].add(id_name_dict[term])
+    return dict(key_collections_dict), dict(new_id_name_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
@@ -212,7 +258,7 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
     """
     i = 0
     for key in tdict_sdict.keys():
-        row = apply_order(tdict_sdict[termLength], src_id_order)
+        row = apply_order(tdict_sdict[key], src_id_order)
         matrix[i,:] = row
         i += 1
     """

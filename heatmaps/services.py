@@ -13,6 +13,7 @@ import json
 from functools import wraps
 from os import environ, path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from collections import namedtuple
 
 import requests
 import psycopg2 as pg
@@ -23,11 +24,11 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
-from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength
+from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
 from .scigraph_client import Graph, Vocabulary
+from hierarchies import creatTree, in_tree, get_node
 
-
-# initilaize scigraph services
+#initiate scigraph services
 graph = Graph()
 vocab = Vocabulary()
 
@@ -91,6 +92,55 @@ SCIGRAPH = "http://matrix.neuinfo.org:9000"
 LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
 TOTAL_TERM_ID = 'federation_totals'  # DO NOT CHANGE
 TOTAL_TERM_ID_NAME = 'Federation Totals'
+
+
+def enrichment(id_name_dict):
+    """
+    Takes in terms and outputs a tree with the common parent as the root
+    Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
+    Output: tree, extra (the same type of stuff that comes from creatTree)
+    """
+    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
+
+    # Make trees for each term. Make a masterSet from the terms
+    listOfSetOfNodes = []
+    for term in id_name_dict:
+        if term == id_name_dict[term]:
+            identifier = TERM_SERVER.term_id_expansion(term)[1]
+        else:
+            identifier = term
+        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
+        tree, extra = creatTree(*queryForTerm)
+        nodes = extra[2]
+        setOfNodes = set(nodes)
+        listOfSetOfNodes.append(setOfNodes)
+
+    # Make masterSet, which has all the nodes the terms share in common in their trees
+    masterSet = listOfSetOfNodes[0]
+    for setOfNodes in listOfSetOfNodes:
+        masterSet = masterSet & setOfNodes
+
+    masterSet.remove('http://www.w3.org/2002/07/owl#Thing')
+    masterSet.remove('CYCLE DETECTED DERPS')
+
+    toFilter = []
+    for node in masterSet:
+        if '#' in node:
+            toFilter.append(node)
+
+    for node in toFilter:
+        masterSet.remove(node)
+
+    while len(masterSet) != 0:
+        randomNode = masterSet.pop()
+        qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
+        tree, extra = creatTree(*qry)
+        objects = extra[4]
+        commonParent = randomNode
+    masterSet = masterSet & set(objects)
+                    
+    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'OUTGOING', 9))
+    return tree, extra
 
 ###
 #   Decorators
@@ -388,7 +438,6 @@ class term_service():  # FURL PLS
             return None
         json_data = vocab.findById(tid)  # FIXME cache this stuff?
         return json_data['labels'][0] if json_data else None
-
 
 TERM_SERVER = term_service()  # sillyness but nice for caching
 
@@ -822,7 +871,7 @@ class heatmap_service(database_service):
                  'json':'application/json',
                  'png':'image/png'}
 
-    collTerms = None, 'collapse terms by character number'
+    collTerms = None, 'collapse terms by character number' , 'collapse terms by hierarchy'
     collSources = None, 'collapse views to sources', 'collapse names to sources'
 
     def __init__(self, summary_server):
@@ -1242,6 +1291,8 @@ class heatmap_service(database_service):
 
         rows = [titles] + sorted([''.join(r) for r in zip(*cols2)])
         expansion = '\n'.join(rows)
+        print("Expansion: ")
+        print(expansion)
 
         explore_fields = {
             'hm_id':hm_id,
@@ -1296,7 +1347,7 @@ class heatmap_service(database_service):
 
     def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,  # FIXME probably want to convert the Nones for sorts to lists?
                collTerms=None, collSources=None, idSortTerms=None, idSortSources=None,
-               ascTerms=True, ascSources=True):
+               ascTerms=True, ascSources=True): 
         """
             Provide a single API for all output types.
         """
@@ -1321,6 +1372,9 @@ class heatmap_service(database_service):
         elif collTerms == 'collapse terms by character number':
             term_coll_function = sCollToLength
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
+        elif collTerms == 'collapse terms by hierarchy':
+            term_coll_function = sCollByTermParent
+            term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
         else:
             term_coll_function = None
             term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
@@ -1329,9 +1383,13 @@ class heatmap_service(database_service):
         if filetype == "png":
             heatmap_data_copy.pop(TOTAL_TERM_ID)
             term_id_name_dict.pop(TOTAL_TERM_ID)
-
+        
         if term_coll_function:
-            term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)
+            if term_coll_function == sCollByTermParent:
+                treeOutput = enrichment(term_id_name_dict)
+                term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, treeOutput, 2)
+            else: 
+                term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)
             if idSortSources != None:
                 for idSortSource in idSortSources:
                     if idSortSource not in term_id_coll_dict:  # note that idSortSources should be a TERM identifier
@@ -1342,15 +1400,7 @@ class heatmap_service(database_service):
         else:
             term_id_coll_dict = None
 
-        def makeSrcIDNameDict():
-            result = {}
-            for key in heatmap_data:
-                if key == TOTAL_TERM_ID:
-                    continue
-                source = heatmap_data[key]
-                for id_ in source:
-                    result[id_] = ' '.join(self.get_name_from_id(id_))
-            return result
+        print(term_id_name_dict)
 
         # sources
         if collSources == 'cheese':
@@ -1371,9 +1421,10 @@ class heatmap_service(database_service):
         else:
             src_id_coll_dict = None
 
+        heatmap_data = dict(heatmap_data_copy)
         # apply the collapse dicts to the data, need to do before sorting for some sort options
         if term_id_coll_dict:
-            heatmap_data = applyCollapse(heatmap_data_copy, term_id_coll_dict, term_axis=True)
+            heatmap_data = applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
 
         if src_id_coll_dict:
             heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
@@ -1381,12 +1432,11 @@ class heatmap_service(database_service):
         #FIXME PROBLEMS KIDS
         #idSortTerms, idSortSources = idSortSources, idSortTerms
 
-        print(term_id_name_dict)
         # sort!
         term_id_order, term_name_order = self.sort(sortTerms,
-                    heatmap_data_copy, idSortTerms, ascTerms, 0, term_id_name_dict)
+                    heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
         src_id_order, src_name_order = self.sort(sortSources,
-                    heatmap_data_copy, idSortSources, ascSources, 1, src_id_name_dict)
+                    heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
 
         # TODO testing the double_sort, it works, need to update the output api to accomodate it
         #term_id_order, term_name_order = self.double_sort('identifier', 'frequency', heatmap_data, None, 'nlx_82958', ascTerms, 0, term_id_name_dict)
@@ -1405,7 +1455,7 @@ class heatmap_service(database_service):
             term_id_order.remove(TOTAL_TERM_ID)
         """
 
-        representation, mimetype = output_function(heatmap_data_copy, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
+        representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
 
