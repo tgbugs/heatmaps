@@ -1176,9 +1176,9 @@ class heatmap_service(database_service):
         """ return a json object with the raw data and the src_id and term_id mappings """
         return json.dumps(heatmap_data), self.mimetypes['json']
 
-    def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, *args, title='heatmap', **kwargs):
+    def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
 
-        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, termCollapseMethod=termCollapseMethod)
+        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         limit = 1000
         if len(matrix) > limit:
             #return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
@@ -1313,8 +1313,6 @@ class heatmap_service(database_service):
         timestamp = timestamp.replace(':','_')  # for consistency wrt attachment;
         filename = 'nif_heatmap_%s_%s.%s' % (heatmap_id, timestamp, filetype)
 
-        termCollapseMethod = collTerms
-
         # collapse rules and execution (need to go in their own function)
         # terms
         if collTerms == 'cheese':
@@ -1385,14 +1383,15 @@ class heatmap_service(database_service):
 
         # sort!
         term_id_order, term_name_order = self.sort(sortTerms,
-                    heatmap_data, idSortTerms, ascTerms, 0, term_id_name_dict)
+                    heatmap_data_copy, idSortTerms, ascTerms, 0, term_id_name_dict)
         src_id_order, src_name_order = self.sort(sortSources,
-                    heatmap_data, idSortSources, ascSources, 1, src_id_name_dict)
+                    heatmap_data_copy, idSortSources, ascSources, 1, src_id_name_dict)
 
         # TODO testing the double_sort, it works, need to update the output api to accomodate it
         #term_id_order, term_name_order = self.double_sort('identifier', 'frequency', heatmap_data, None, 'nlx_82958', ascTerms, 0, term_id_name_dict)
 
         """
+        This code can properly collapse terms, but will not work when collapsing terms by character number AND have a 17 character term. 
         if filetype == "png":
             term_name_order = list(term_name_order)
             term_id_order = list(term_id_order)
@@ -1405,7 +1404,7 @@ class heatmap_service(database_service):
             term_id_order.remove(TOTAL_TERM_ID)
         """
 
-        representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, termCollapseMethod, title=filename)
+        representation, mimetype = output_function(heatmap_data_copy, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
 
