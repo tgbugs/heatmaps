@@ -1381,6 +1381,7 @@ class heatmap_service(database_service):
         #FIXME PROBLEMS KIDS
         #idSortTerms, idSortSources = idSortSources, idSortTerms
 
+        print(term_id_name_dict)
         # sort!
         term_id_order, term_name_order = self.sort(sortTerms,
                     heatmap_data_copy, idSortTerms, ascTerms, 0, term_id_name_dict)
