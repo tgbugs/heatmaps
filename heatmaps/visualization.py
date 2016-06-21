@@ -75,13 +75,14 @@ def sCollToLength(keys, id_name_dict):
     Output:
     -key_collections_dict: a dictionary with term length (integer) as keys and terms as values. Example: {4: {"term1", "term2"}}
     -new_id_name_dict: a dictionary with term as keys and term lengths as values. Example: {"hbox": 4}
+    {4: {"hbox"}}
     """
     key_collections_dict = defaultdict(set)
-    new_id_name_dict = {}
+    new_id_name_dict = defaultdict(set)
     for key in keys:
         parent_key = len(key)
         key_collections_dict[parent_key].add(key)
-        new_id_name_dict[key] = parent_key
+        new_id_name_dict[parent_key].add(key)
     return dict(key_collections_dict), new_id_name_dict
 
 """
