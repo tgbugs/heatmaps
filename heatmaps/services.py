@@ -1373,7 +1373,7 @@ class heatmap_service(database_service):
 
         # apply the collapse dicts to the data, need to do before sorting for some sort options
         if term_id_coll_dict:
-            heatmap_data = applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
+            heatmap_data = applyCollapse(heatmap_data_copy, term_id_coll_dict, term_axis=True)
 
         if src_id_coll_dict:
             heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
