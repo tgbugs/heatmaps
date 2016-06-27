@@ -40,13 +40,13 @@ def in_tree(node, tree):  # XXX TODO
 def get_node(start, tree, pnames):
     """
     For each parent find a single branch to root
-    Inputs: start (Node), tree (Tree?), and pnames (list? dictionary? list in list?)
+    Inputs: start (String?), tree (Tree?), and pnames (list? dictionary? list in list?)
     Outputs: tree, branch
     -Ben
     """
     def get_first_branch(node):
         """
-        Inputs: node (Node). Intended input is "start" from get_node
+        Inputs: node (String?). Intended input is "start" from get_node
         Output: 
         -Ben
         """
