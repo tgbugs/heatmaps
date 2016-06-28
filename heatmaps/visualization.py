@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections import namedtuple
 import numpy as np
 from matplotlib import use as mpluse
 mpluse('Agg')
@@ -6,7 +7,7 @@ import pylab as plt
 
 from IPython import embed
 
-from .hierarchies import creatTree, in_tree
+from .hierarchies import creatTree, in_tree, get_node
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -101,8 +102,8 @@ def enrichment(id_name_dict):
     # Make trees for each term. Make a masterSet from the terms
     listOfSetOfNodes = []
     for term in id_name_dict:
-        queryForTerm = Query(term, 'subClassOf', 'INCOMING', 9)
-        tree, extra = creatTree(queryForTerm)
+        queryForTerm = Query('UBERON:0000955', 'http://purl.obolibrary.org/obo/BFO_0000050', 'INCOMING', 9)
+        tree, extra = creatTree(*queryForTerm)
         nodes = extra[2]
         setOfNodes = set(nodes)
         listOfSetOfNodes.append(setOfNodes)
@@ -116,11 +117,11 @@ def enrichment(id_name_dict):
 
     # Take a random node from the masterSet. Find it in the tree. If it has children that are 
     # also in the masterSet, continue looking. If it doesn't, we've found the common parent!
-    output = get_Node(randomNode, tree, extra[-1])
+    output = get_node(randomNode, tree, extra[-1])
     foundCommonParent = False
     childrenOfNode = output[0][randomNode]    # this is a dictionary
     commonParent = randomNode
-    while !foundCommonParent:
+    while not foundCommonParent:
         matchFoundInChildren = False
         for child in childrenOfNode:
             if child in masterSet:
@@ -129,7 +130,7 @@ def enrichment(id_name_dict):
                 childrenOfNode = childrenOfNode[child]
                 commonParent = child
                 break
-        if !matchFoundInChildren:
+        if not matchFoundInChildren:
             foundCommonParent = True
     
     # Unneeded line. Keeping it here just in case: childrenOfCommonParent = childrenOfNode[commonParent]
@@ -157,7 +158,7 @@ def sCollByTermParent(keys, id_name_dict, level):
         """
         Get a list of trees that are at the requested level. 
         """
-        if levelsRemaining = 0:
+        if levelsRemaining == 0:
             return listOfTrees
         newListOfTrees = []
         for tree in listOfTrees:

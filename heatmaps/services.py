@@ -1296,7 +1296,7 @@ class heatmap_service(database_service):
 
     def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,  # FIXME probably want to convert the Nones for sorts to lists?
                collTerms=None, collSources=None, idSortTerms=None, idSortSources=None,
-               ascTerms=True, ascSources=True):
+               ascTerms=True, ascSources=True): 
         """
             Provide a single API for all output types.
         """
@@ -1334,7 +1334,7 @@ class heatmap_service(database_service):
             term_id_name_dict.pop(TOTAL_TERM_ID)
 
         if term_coll_function:
-            if term_coll_function = sCollByTermParent:
+            if term_coll_function == sCollByTermParent:
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, 2)
             else: 
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)

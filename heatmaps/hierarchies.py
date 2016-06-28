@@ -66,7 +66,7 @@ def get_node(start, tree, pnames):
     for n in branch[::-1]:
         tree = tree[n]
 
-    assert start in tree, "our start wasnt in the tree! OH NO!"
+    assert start in tree, "our start wasnt in the tree! OH NO! Start: " + start
     branch = [start] + branch
     print('branch', branch)
     return tree, branch
@@ -290,10 +290,12 @@ def creatTree(root, relationshipType, direction, depth, url_base='matrix.neuinfo
     -Ben
     """
     query_string = 'http://{url_base}/scigraph/graph/neighbors/{root}?relationshipType={relationshipType}&direction={direction}&depth={depth}'
-
+    
     relationshipType = relationshipType.replace('#','%23')
     query = query_string.format(root=root, relationshipType=relationshipType,
                                 direction=direction, depth=depth, url_base=url_base)
+
+    print(query)
 
     # If Json doesn't exist, make one from query. Think of j (json) as a dictionary. -Ben
     if json is None:
