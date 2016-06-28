@@ -102,7 +102,7 @@ def enrichment(id_name_dict):
     # Make trees for each term. Make a masterSet from the terms
     listOfSetOfNodes = []
     for term in id_name_dict:
-        queryForTerm = Query('UBERON:0000955', 'http://purl.obolibrary.org/obo/BFO_0000050', 'INCOMING', 9)
+        queryForTerm = Query('UBERON:0000955', 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
         tree, extra = creatTree(*queryForTerm)
         nodes = extra[2]
         setOfNodes = set(nodes)
@@ -113,28 +113,22 @@ def enrichment(id_name_dict):
     for setOfNodes in listOfSetOfNodes:
         masterSet = masterSet & setOfNodes
 
+    
+
+    
     randomNode = masterSet.pop()
 
     # Take a random node from the masterSet. Find it in the tree. If it has children that are 
     # also in the masterSet, continue looking. If it doesn't, we've found the common parent!
     output = get_node(randomNode, tree, extra[-1])
-    foundCommonParent = False
-    childrenOfNode = output[0][randomNode]    # this is a dictionary
     commonParent = randomNode
-    while not foundCommonParent:
-        matchFoundInChildren = False
-        for child in childrenOfNode:
-            if child in masterSet:
-                matchFoundInChildren = True
-                #output = get_Node(child, tree, extra[-1])
-                childrenOfNode = childrenOfNode[child]
-                commonParent = child
-                break
-        if not matchFoundInChildren:
-            foundCommonParent = True
-    
+    while len(masterSet) != 0:
+        for node in masterSet:
+            if not in_tree(node, output[0]):
+                commonParent = node
+        
     # Unneeded line. Keeping it here just in case: childrenOfCommonParent = childrenOfNode[commonParent]
-    tree, extra = creatTree(Query(commonParent, 'subClassOf', "OUTGOING", 9))  
+    tree, extra = creatTree(Query(commonParent, 'subClassOf', "OUTGOING", 9))      # TODO: find a way to get term identifiers
 
     return tree, extra
 
@@ -193,12 +187,12 @@ def sCollByTermParent(keys, id_name_dict, level):
         # get the root and save as variable "root"
         root, restOfTree = tree.items()[0]
         root = root[0]   # there's only one key, and it's the root
-        for term in term_to_tree:
+        for term in term_to_tree.keys():
             if term_to_tree[term] == treeNumber:
                 key_collections_dict[root].add(term)
                 id_name_dict[root].add(id_name_dict(term))
 
-    return dict(key_collections_dict), new_id_name_dict
+    return dict(key_collections_dict), dict(new_id_name_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
     """
