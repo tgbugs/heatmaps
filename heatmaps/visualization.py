@@ -102,7 +102,7 @@ def enrichment(id_name_dict):
     # Make trees for each term. Make a masterSet from the terms
     listOfSetOfNodes = []
     for term in id_name_dict:
-        queryForTerm = Query('UBERON:0000955', 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
+        queryForTerm = Query(term, 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
         tree, extra = creatTree(*queryForTerm)
         nodes = extra[2]
         setOfNodes = set(nodes)
@@ -120,7 +120,7 @@ def enrichment(id_name_dict):
 
     # Take a random node from the masterSet. Find it in the tree. If it has children that are 
     # also in the masterSet, continue looking. If it doesn't, we've found the common parent!
-    output = get_node(randomNode, tree, extra[-1])
+    output = get_node(randomNode, extra[0], extra[-1])
     commonParent = randomNode
     while len(masterSet) != 0:
         for node in masterSet:
