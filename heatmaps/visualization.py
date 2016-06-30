@@ -7,7 +7,7 @@ import pylab as plt
 
 from IPython import embed
 
-from .hierarchies import creatTree, in_tree, get_node
+from .hierarchies import creatTree, in_tree, get_node, term_service
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -101,9 +101,14 @@ def enrichment(id_name_dict):
 
     # Make trees for each term. Make a masterSet from the terms
     listOfSetOfNodes = []
+    ts = term_service()
     for term in id_name_dict:
-        print(term)
-        queryForTerm = Query(term, 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
+        if term == id_name_dict(term):
+            identifier = ts.term_id_expansion(term)
+        else:
+            identifier = term
+        print(identifier)
+        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
         tree, extra = creatTree(*queryForTerm)
         nodes = extra[2]
         setOfNodes = set(nodes)
