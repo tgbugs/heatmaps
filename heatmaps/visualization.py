@@ -102,6 +102,7 @@ def enrichment(id_name_dict):
     # Make trees for each term. Make a masterSet from the terms
     listOfSetOfNodes = []
     for term in id_name_dict:
+        print(term)
         queryForTerm = Query(term, 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
         tree, extra = creatTree(*queryForTerm)
         nodes = extra[2]

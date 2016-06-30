@@ -1333,6 +1333,8 @@ class heatmap_service(database_service):
             heatmap_data_copy.pop(TOTAL_TERM_ID)
             term_id_name_dict.pop(TOTAL_TERM_ID)
 
+        print(heatmap_data)
+        
         if term_coll_function:
             if term_coll_function == sCollByTermParent:
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, 2)
