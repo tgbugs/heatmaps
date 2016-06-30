@@ -1242,6 +1242,8 @@ class heatmap_service(database_service):
 
         rows = [titles] + sorted([''.join(r) for r in zip(*cols2)])
         expansion = '\n'.join(rows)
+        print("Expansion: ")
+        print(expansion)
 
         explore_fields = {
             'hm_id':hm_id,
@@ -1332,8 +1334,6 @@ class heatmap_service(database_service):
         if filetype == "png":
             heatmap_data_copy.pop(TOTAL_TERM_ID)
             term_id_name_dict.pop(TOTAL_TERM_ID)
-
-        print(heatmap_data)
         
         if term_coll_function:
             if term_coll_function == sCollByTermParent:
