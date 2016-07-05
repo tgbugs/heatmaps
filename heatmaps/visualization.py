@@ -104,14 +104,14 @@ def enrichment(id_name_dict):
     listOfSetOfNodes = []
     ts = term_service()
     for term in id_name_dict:
-        if term == id_name_dict(term):
-            identifier = ts.term_id_expansion(term)
+        if term == id_name_dict[term]:
+            identifier = ts.term_id_expansion(term)[1]
         else:
             identifier = term
-        print(identifier)
         queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
         tree, extra = creatTree(*queryForTerm)
-        nodes = extra[2]
+        nodes = extra[1]
+        print(nodes)
         setOfNodes = set(nodes)
         listOfSetOfNodes.append(setOfNodes)
 
@@ -120,9 +120,6 @@ def enrichment(id_name_dict):
     for setOfNodes in listOfSetOfNodes:
         masterSet = masterSet & setOfNodes
 
-    
-
-    
     randomNode = masterSet.pop()
 
     # Take a random node from the masterSet. Find it in the tree. If it has children that are 

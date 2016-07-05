@@ -1,5 +1,5 @@
 
-from scigraph_client import Graph, Vocabulary
+from .scigraph_client import Graph, Vocabulary
 
 #initiate scigraph services
 graph = Graph()
