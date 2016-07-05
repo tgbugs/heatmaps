@@ -24,8 +24,7 @@ else:
     from IPython import embed
 
 from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png
-from .scigraph_client import Graph, Vocabulary
-
+from pyontutils.scigraph_client import Graph, Vocabulary
 
 # initilaize scigraph services
 graph = Graph()
@@ -816,9 +815,10 @@ class heatmap_service(database_service):
     port = 5432
     hstore = True
     TERM_MIN = 5
-    supported_filetypes = None, 'csv', 'json', 'png'  # need for output
+    supported_filetypes = None, 'csv', 'html', 'json', 'png'  # need for output
     mimetypes = {None:'text/plain',
                  'csv':'text/csv',
+                 'html':'text/html',
                  'json':'application/json',
                  'png':'image/png'}
 
@@ -836,8 +836,9 @@ class heatmap_service(database_service):
         self.check_counts()
         self.output_map = {
             None:self.output_json,
-            'json':self.output_json,
             'csv':self.output_csv,
+            'html':self.output_html,
+            'json':self.output_json,
             'png':self.output_png,
                      }
 
@@ -1171,6 +1172,33 @@ class heatmap_service(database_service):
                 csv_string += line
 
         return csv_string, self.mimetypes['csv']
+
+    def output_html(self, heatmap_data, term_name_order, src_name_order, term_id_order,
+                   src_id_order, *args, sep=",", export_ids=True, **kwargs):
+        term_name_order = list(term_name_order)
+        term_id_order = list(term_id_order)
+        
+        html_string = '<table border=1 style="width:100%">'
+        html_string += '<th><td>' + '</td><td>'.join(src_name_order) + '</td></th>'
+        for term_id in term_id_order:
+            term_name = term_id
+            if term_id == 'federation_totals':
+                term_name = '*'
+            html_string += '<tr>'
+            html_string += '<td>' + term_name + '</td>'
+            for src_id in src_id_order:
+                count = heatmap_data[term_id][src_id] if src_id in heatmap_data[term_id] else 0
+                html_string += '<td>'
+                datlit = 'data'
+                if src_id == 'nlx_82958':
+                    html_string += '<a href="http://neuinfo.org/literature/search?q={term_id}">{count}</a>'.format(term_id=term_name, count=count)
+                else:
+                    html_string += '<a href="http://neuinfo.org/data/source/{src_id}/search?q={term_id}">{count}</a>'.format(src_id=src_id, term_id=term_name, count=count)
+                html_string += '</td>'
+            html_string += '</tr>'
+        html_string += '</table>'
+    
+        return html_string, self.mimetypes['html']
 
     def output_json(self, heatmap_data, *args, **kwargs):
         """ return a json object with the raw data and the src_id and term_id mappings """

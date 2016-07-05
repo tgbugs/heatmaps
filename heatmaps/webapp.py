@@ -183,9 +183,9 @@ def do_terms(terms, filename=None):
 
     base_url = 'http://' + request.host + ext_path
     job_url = base_url + '/terms/jobs/' + str(job_id)
-    output = ('Your list of terms has been submitted, your job is currently'
-              'processing and you will be notified when it completes.'
-              'Your job_id is {JOBID}. You when your job is done the url below will'
+    output = ('Your list of terms has been submitted, your job is currently '
+              'processing and you will be notified when it completes. '
+              'Your job_id is {JOBID}. You when your job is done the url below will '
               'redirect to your heatmap.<br>'
               '<a href={JOBURL}>{JOBURL}</a>').format(JOBID=job_id, JOBURL=job_url)
 
@@ -198,9 +198,12 @@ def do_terms(terms, filename=None):
     output = """
             <!doctype html>
             <title>Submit</title>
-            When your job is finished your heatmap can be downloaded as a png, a csv or as a json file at:
+            When your job is finished your heatmap can be downloaded as
+            a png, a csv, an html table, or as a json file at:
             <br><br>
             <a href={url}.csv>{url}.csv</a>
+            <br>
+            <a href={url}.html>{url}.html</a>
             <br>
             <a href={url}.json>{url}.json</a>
             <br>
@@ -579,7 +582,7 @@ def docs():
     <h1>NIF heatmaps documentation</h1>
     To view an existing heatmap append the heatmapid to the following url: <br>
     <a href={prov_url}>{prov_url}</a><br>
-    Currently supported filetypes are csv, json, and png. <br>
+    Currently supported filetypes are csv, html, json, and png. <br>
     Example: <a href={prov_url}0.png>{prov_url}0.png</a> (note that this heatmap doesn't actually exist) <br>
     <br>
     To explore an existing heatmap append the heatmapid to the following url: <br>
