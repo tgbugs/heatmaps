@@ -7,7 +7,9 @@ import pylab as plt
 
 from IPython import embed
 
-from .hierarchies import creatTree, in_tree, get_node, term_service
+from .hierarchies import creatTree, in_tree, get_node
+from .services import term_service
+TERM_SERVICE = term_service()
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
