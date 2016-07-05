@@ -8,7 +8,6 @@ import pylab as plt
 from IPython import embed
 
 from .hierarchies import creatTree, in_tree, get_node
-from .termService import term_service
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -136,7 +135,7 @@ def enrichment(id_name_dict):
 
     return tree, extra
 
-def sCollByTermParent(keys, id_name_dict, level):
+def sCollByTermParent(keys, id_name_dict, tree, level):
     """
     Inputs: 
     -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}, "term2": {src2-1, src2-0}, "term3": {src4-1, src4-2}}
@@ -149,8 +148,6 @@ def sCollByTermParent(keys, id_name_dict, level):
     """
     key_collections_dict = defaultdict(set)
     new_id_name_dict = defaultdict(set)
-
-    tree, extra = enrichment(id_name_dict)
 
     def findTreeLevel(listOfTrees, levelsRemaining):
         """
