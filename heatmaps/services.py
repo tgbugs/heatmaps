@@ -93,6 +93,55 @@ LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
 TOTAL_TERM_ID = 'federation_totals'  # DO NOT CHANGE
 TOTAL_TERM_ID_NAME = 'Federation Totals'
 
+
+def enrichment(id_name_dict):
+    """
+    Takes in terms and outputs a tree with the common parent as the root
+    Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
+    Output: tree, extra (the same type of stuff that comes from creatTree)
+    """
+    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
+
+    # Make trees for each term. Make a masterSet from the terms
+    listOfSetOfNodes = []
+    for term in id_name_dict:
+        if term == id_name_dict[term]:
+            identifier = TERM_SERVER.term_id_expansion(term)[1]
+        else:
+            identifier = term
+        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
+        tree, extra = creatTree(*queryForTerm)
+        nodes = extra[2]
+        setOfNodes = set(nodes)
+        listOfSetOfNodes.append(setOfNodes)
+
+    # Make masterSet, which has all the nodes the terms share in common in their trees
+    masterSet = listOfSetOfNodes[0]
+    for setOfNodes in listOfSetOfNodes:
+        masterSet = masterSet & setOfNodes
+
+    masterSet.remove('http://www.w3.org/2002/07/owl#Thing')
+    masterSet.remove('CYCLE DETECTED DERPS')
+
+    toFilter = []
+    for node in masterSet:
+        if '#' in node:
+            toFilter.append(node)
+
+    for node in toFilter:
+        masterSet.remove(node)
+
+    while len(masterSet) != 0:
+        randomNode = masterSet.pop()
+        qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
+        tree, extra = creatTree(*qry)
+        objects = extra[4]
+        commonParent = randomNode
+    masterSet = masterSet & set(objects)
+                    
+    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'OUTGOING', 9))
+    return tree, extra
+
 ###
 #   Decorators
 ###
@@ -1337,55 +1386,6 @@ class heatmap_service(database_service):
         
         if term_coll_function:
             if term_coll_function == sCollByTermParent:
-
-                def enrichment(id_name_dict):
-                    """
-                    Takes in terms and outputs a tree with the common parent as the root
-                    Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
-                    Output: tree, extra (the same type of stuff that comes from creatTree)
-                    """
-                    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
-
-                    # Make trees for each term. Make a masterSet from the terms
-                    listOfSetOfNodes = []
-                    for term in id_name_dict:
-                        if term == id_name_dict[term]:
-                            identifier = TERM_SERVER.term_id_expansion(term)[1]
-                        else:
-                            identifier = term
-                        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
-                        tree, extra = creatTree(*queryForTerm)
-                        nodes = extra[2]
-                        setOfNodes = set(nodes)
-                        listOfSetOfNodes.append(setOfNodes)
-
-                    # Make masterSet, which has all the nodes the terms share in common in their trees
-                    masterSet = listOfSetOfNodes[0]
-                    for setOfNodes in listOfSetOfNodes:
-                        masterSet = masterSet & setOfNodes
-
-                    masterSet.remove('http://www.w3.org/2002/07/owl#Thing')
-                    masterSet.remove('CYCLE DETECTED DERPS')
-
-                    toFilter = []
-                    for node in masterSet:
-                        if '#' in node:
-                             toFilter.append(node)
-
-                    for node in toFilter:
-                        masterSet.remove(node)
-
-                    while len(masterSet) != 0:
-                        randomNode = masterSet.pop()
-                        qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
-                        tree, extra = creatTree(*qry)
-                        objects = extra[4]
-                        commonParent = randomNode
-                        masterSet = masterSet & set(objects)
-                        
-                    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'OUTGOING', 9))
-                    return tree, extra
-
                 treeOutput = enrichment(term_id_name_dict)
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, treeOutput, 2)
             else: 

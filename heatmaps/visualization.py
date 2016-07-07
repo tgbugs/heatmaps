@@ -115,7 +115,6 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
             if key not in parentIdentifiers:
                 listOfTrees.append(noRootTree[key])
         return findTreeLevelHelper(listOfTrees, levelsRemaining - 1)
-
     def findTreeLevelHelper(listOfTrees, levelsRemaining):
         """
         Get a list of trees that are at the requested level. 
@@ -159,8 +158,7 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
         for term in term_to_tree.keys():
             if term_to_tree[term] == treeNumber:
                 key_collections_dict[root].add(term)
-                new_id_name_dict[root].add(id_name_dict(term))
-
+                new_id_name_dict[root].add(id_name_dict[term])
     return dict(key_collections_dict), dict(new_id_name_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
