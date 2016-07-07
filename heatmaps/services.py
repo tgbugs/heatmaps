@@ -13,6 +13,7 @@ import json
 from functools import wraps
 from os import environ, path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from collections import namedtuple
 
 import requests
 import psycopg2 as pg
@@ -25,6 +26,7 @@ else:
 
 from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
 from .scigraph_client import Graph, Vocabulary
+from .hierarchies import creatTree, in_tree, get_node
 
 #initiate scigraph services
 graph = Graph()
@@ -1342,7 +1344,7 @@ class heatmap_service(database_service):
                     Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
                     Output: tree, extra (the same type of stuff that comes from creatTree)
                     """
-                   Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
+                    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
 
                     # Make trees for each term. Make a masterSet from the terms
                     listOfSetOfNodes = []
@@ -1351,36 +1353,41 @@ class heatmap_service(database_service):
                             identifier = TERM_SERVER.term_id_expansion(term)[1]
                         else:
                             identifier = term
-                        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
+                        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
                         tree, extra = creatTree(*queryForTerm)
-                        nodes = extra[1]
-                        print(nodes)
+                        nodes = extra[2]
                         setOfNodes = set(nodes)
                         listOfSetOfNodes.append(setOfNodes)
 
                     # Make masterSet, which has all the nodes the terms share in common in their trees
                     masterSet = listOfSetOfNodes[0]
-                        for setOfNodes in listOfSetOfNodes:
+                    for setOfNodes in listOfSetOfNodes:
                         masterSet = masterSet & setOfNodes
 
-                    randomNode = masterSet.pop()
+                    masterSet.remove('http://www.w3.org/2002/07/owl#Thing')
+                    masterSet.remove('CYCLE DETECTED DERPS')
 
-                    # Take a random node from the masterSet. Find it in the tree. If it has children that are 
-                    # also in the masterSet, continue looking. If it doesn't, we've found the common parent!
-                    output = get_node(randomNode, extra[0], extra[-1])
-                    commonParent = randomNode
+                    toFilter = []
+                    for node in masterSet:
+                        if '#' in node:
+                             toFilter.append(node)
+
+                    for node in toFilter:
+                        masterSet.remove(node)
+
                     while len(masterSet) != 0:
-                        for node in masterSet:
-                            if not in_tree(node, output[0]):
-                                commonParent = node
-        
-                    # Unneeded line. Keeping it here just in case: childrenOfCommonParent = childrenOfNode[commonParent]
-                    tree, extra = creatTree(Query(commonParent, 'subClassOf', "OUTGOING", 9))      # TODO: find a way to get term identifiers
-
+                        randomNode = masterSet.pop()
+                        qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
+                        tree, extra = creatTree(*qry)
+                        objects = extra[4]
+                        commonParent = randomNode
+                        masterSet = masterSet & set(objects)
+                        
+                    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'OUTGOING', 9))
                     return tree, extra
 
-                tree, extra = enrichment(term_id_name_dict)
-                term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, tree, 2)
+                treeOutput = enrichment(term_id_name_dict)
+                term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, treeOutput, 2)
             else: 
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)
             if idSortSources != None:
@@ -1393,15 +1400,7 @@ class heatmap_service(database_service):
         else:
             term_id_coll_dict = None
 
-        def makeSrcIDNameDict():
-            result = {}
-            for key in heatmap_data:
-                if key == TOTAL_TERM_ID:
-                    continue
-                source = heatmap_data[key]
-                for id_ in source:
-                    result[id_] = ' '.join(self.get_name_from_id(id_))
-            return result
+        print(term_id_name_dict)
 
         # sources
         if collSources == 'cheese':

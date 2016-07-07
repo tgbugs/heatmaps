@@ -295,8 +295,6 @@ def creatTree(root, relationshipType, direction, depth, url_base='matrix.neuinfo
     query = query_string.format(root=root, relationshipType=relationshipType,
                                 direction=direction, depth=depth, url_base=url_base)
 
-    print(query)
-
     # If Json doesn't exist, make one from query. Think of j (json) as a dictionary. -Ben
     if json is None:
         j = requests.get(query).json()

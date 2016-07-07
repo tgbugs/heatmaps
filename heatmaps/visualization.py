@@ -1,5 +1,4 @@
 from collections import defaultdict
-from collections import namedtuple
 import numpy as np
 from matplotlib import use as mpluse
 mpluse('Agg')
@@ -7,7 +6,7 @@ import pylab as plt
 
 from IPython import embed
 
-from .hierarchies import creatTree, in_tree, get_node
+from .hierarchies import in_tree
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
@@ -91,51 +90,7 @@ def sCollToLength(keys, id_name_dict):
         new_id_name_dict[parent_key].add(key)
     return dict(key_collections_dict), new_id_name_dict
 
-def enrichment(id_name_dict):
-    """
-    Takes in terms and outputs a tree with the common parent as the root
-    Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
-    Output: tree, extra (the same type of stuff that comes from creatTree)
-    """
-    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
-
-    # Make trees for each term. Make a masterSet from the terms
-    listOfSetOfNodes = []
-    ts = term_service()
-    for term in id_name_dict:
-        if term == id_name_dict[term]:
-            identifier = ts.term_id_expansion(term)[1]
-        else:
-            identifier = term
-        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)    # TODO: find a way to get the term identifiers
-        tree, extra = creatTree(*queryForTerm)
-        nodes = extra[1]
-        print(nodes)
-        setOfNodes = set(nodes)
-        listOfSetOfNodes.append(setOfNodes)
-
-    # Make masterSet, which has all the nodes the terms share in common in their trees
-    masterSet = listOfSetOfNodes[0]
-    for setOfNodes in listOfSetOfNodes:
-        masterSet = masterSet & setOfNodes
-
-    randomNode = masterSet.pop()
-
-    # Take a random node from the masterSet. Find it in the tree. If it has children that are 
-    # also in the masterSet, continue looking. If it doesn't, we've found the common parent!
-    output = get_node(randomNode, extra[0], extra[-1])
-    commonParent = randomNode
-    while len(masterSet) != 0:
-        for node in masterSet:
-            if not in_tree(node, output[0]):
-                commonParent = node
-        
-    # Unneeded line. Keeping it here just in case: childrenOfCommonParent = childrenOfNode[commonParent]
-    tree, extra = creatTree(Query(commonParent, 'subClassOf', "OUTGOING", 9))      # TODO: find a way to get term identifiers
-
-    return tree, extra
-
-def sCollByTermParent(keys, id_name_dict, tree, level):
+def sCollByTermParent(keys, id_name_dict, treeOutput, level):
     """
     Inputs: 
     -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}, "term2": {src2-1, src2-0}, "term3": {src4-1, src4-2}}
@@ -149,7 +104,19 @@ def sCollByTermParent(keys, id_name_dict, tree, level):
     key_collections_dict = defaultdict(set)
     new_id_name_dict = defaultdict(set)
 
-    def findTreeLevel(listOfTrees, levelsRemaining):
+    tree, extra = treeOutput[0], treeOutput[1]
+
+    def findTreeLevel(tree, extra, levelsRemaining):
+        parentIdentifiers = extra[4]
+        key = tree.keys()[0]
+        noRootTree = tree[key]
+        listOfTrees = []
+        for key in noRootTree:
+            if key not in parentIdentifiers:
+                listOfTrees.append(noRootTree[key])
+        return findTreeLevelHelper(listOfTrees, levelsRemaining - 1)
+
+    def findTreeLevelHelper(listOfTrees, levelsRemaining):
         """
         Get a list of trees that are at the requested level. 
         """
@@ -157,8 +124,9 @@ def sCollByTermParent(keys, id_name_dict, tree, level):
             return listOfTrees
         newListOfTrees = []
         for tree in listOfTrees:
-            for keys in tree:
-                child = tree[key]
+            noRootTree = tree[tree.keys()[0]]
+            for key in noRootTree:
+                child = noRootTree[key]
                 newListOfTrees.append(child)
         return findTreeLevel(newListOfTrees, levelsRemaining - 1)
     def filterListOfTrees(listOfTrees):
@@ -181,8 +149,8 @@ def sCollByTermParent(keys, id_name_dict, tree, level):
                 treeNumber += 1
         return filteredTrees, term_to_tree
 
-    listOfTrees = findTreeLevel([tree], level)
-    listOfTrees, term_to_tree = filteredTrees(listOfTrees)
+    listOfTrees = findTreeLevel(tree, extra, level)
+    listOfTrees, term_to_tree = filterListOfTrees(listOfTrees)
 
     for treeNumber, tree in enumerate(listOfTrees):
         # get the root and save as variable "root"
@@ -191,7 +159,7 @@ def sCollByTermParent(keys, id_name_dict, tree, level):
         for term in term_to_tree.keys():
             if term_to_tree[term] == treeNumber:
                 key_collections_dict[root].add(term)
-                id_name_dict[root].add(id_name_dict(term))
+                new_id_name_dict[root].add(id_name_dict(term))
 
     return dict(key_collections_dict), dict(new_id_name_dict)
 
