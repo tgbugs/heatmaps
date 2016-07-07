@@ -26,7 +26,7 @@ else:
 
 from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
 from .scigraph_client import Graph, Vocabulary
-from .hierarchies import creatTree, in_tree, get_node
+from hierarchies import creatTree, in_tree, get_node
 
 #initiate scigraph services
 graph = Graph()

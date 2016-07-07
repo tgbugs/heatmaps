@@ -6,7 +6,7 @@ import pylab as plt
 
 from IPython import embed
 
-from .hierarchies import in_tree
+from hierarchies import in_tree
 
 def discretize(data_matrix):
     bins = [0,1,10,100]
