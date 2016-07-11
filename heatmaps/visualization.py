@@ -108,8 +108,9 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
 
     def findTreeLevel(tree, extra, levelsRemaining):
         parentIdentifiers = extra[4]
-        key = tree.keys()[0]
-        noRootTree = tree[key]
+        for key in tree:
+            root = key
+        noRootTree = tree[root]
         listOfTrees = []
         for key in noRootTree:
             if key not in parentIdentifiers:
@@ -123,7 +124,9 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
             return listOfTrees
         newListOfTrees = []
         for tree in listOfTrees:
-            noRootTree = tree[tree.keys()[0]]
+            for key in tree:
+                root = key
+            noRootTree = tree[root]
             for key in noRootTree:
                 child = noRootTree[key]
                 newListOfTrees.append(child)
