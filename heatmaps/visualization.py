@@ -107,6 +107,8 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
     tree, extra = treeOutput[0], treeOutput[1]
 
     def findTreeLevel(tree, extra, levelsRemaining):
+        if levelsRemaining == 0:
+            return [tree]
         parentIdentifiers = extra[4]
         for key in tree:
             root = key
@@ -126,11 +128,11 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
         for tree in listOfTrees:
             for key in tree:
                 root = key
-            noRootTree = tree[root]
-            for key in noRootTree:
-                child = noRootTree[key]
-                newListOfTrees.append(child)
-        return findTreeLevel(newListOfTrees, levelsRemaining - 1)
+                noRootTree = tree[root]
+                for key in noRootTree:
+                    child = noRootTree[key]
+                    newListOfTrees.append(child)
+        return findTreeLevelHelper(newListOfTrees, levelsRemaining - 1)
     def filterListOfTrees(listOfTrees):
         """
         Ensures all the trees have the terms we want in them. 
@@ -156,12 +158,19 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
 
     for treeNumber, tree in enumerate(listOfTrees):
         # get the root and save as variable "root"
-        root, restOfTree = tree.items()[0]
-        root = root[0]   # there's only one key, and it's the root
+        for key in tree:
+            root = key
+            restOfTree = tree[key]
         for term in term_to_tree.keys():
             if term_to_tree[term] == treeNumber:
                 key_collections_dict[root].add(term)
                 new_id_name_dict[root].add(id_name_dict[term])
+
+    for term in id_name_dict:
+        if term not in term_to_tree:
+            key_collections_dict["No identifiers"].add(term)
+            new_id_name_dict["No identifiers"].add(id_name_dict[term])
+                
     return dict(key_collections_dict), dict(new_id_name_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
@@ -227,7 +236,6 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
         term_id_order.remove(TOTAL_TERM_ID)
     
     matrix = np.empty((len(term_id_order), len(src_id_order)))
-    print(term_id_order)
     #tdict_sdict.keys()
     """
     if termCollapseMethod == 'collapse terms by character number':
@@ -243,16 +251,18 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
     else:
     """
     i = 0
+    row_term_relation = {}    # This dictionary will take the row number as a key and output the corresponding term
     for key in tdict_sdict.keys():
         row = apply_order(tdict_sdict[key], src_id_order)
         matrix[i,:] = row
+        row_term_relation[i] = key
         i += 1
     """
     for i, term in enumerate(term_id_order):
         row = apply_order(tdict_sdict[term], src_id_order)
         matrix[i,:] = row
     """
-    return np.nan_to_num(matrix)
+    return np.nan_to_num(matrix), row_term_relation
 
 def heatmap_data_processing(heatmap_data, termCollapse=None, sourceCollapse=None, termOrder=None, sourceOrder=None, TOTAL_KEY='federation_totals'):
     """

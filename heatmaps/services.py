@@ -102,6 +102,11 @@ def enrichment(id_name_dict):
     """
     Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
 
+    try:
+        id_name_dict.pop(TOTAL_TERM_ID)
+    except KeyError:
+        pass
+    
     # Make trees for each term. Make a masterSet from the terms
     listOfSetOfNodes = []
     for term in id_name_dict:
@@ -110,19 +115,25 @@ def enrichment(id_name_dict):
         else:
             identifier = term
         queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
-        tree, extra = creatTree(*queryForTerm)
-        nodes = extra[2]
-        setOfNodes = set(nodes)
-        listOfSetOfNodes.append(setOfNodes)
+        try:
+            tree, extra = creatTree(*queryForTerm)
+            nodes = extra[2]
+            setOfNodes = set(nodes)
+            listOfSetOfNodes.append(setOfNodes)
+        except:
+            pass
 
     # Make masterSet, which has all the nodes the terms share in common in their trees
     masterSet = listOfSetOfNodes[0]
     for setOfNodes in listOfSetOfNodes:
         masterSet = masterSet & setOfNodes
 
-    masterSet.remove('http://www.w3.org/2002/07/owl#Thing')
+    try:
+        masterSet.remove('http://www.w3.org/2002/07/owl#Thing')
+    except KeyError:
+        pass
     masterSet.remove('CYCLE DETECTED DERPS')
-
+    
     toFilter = []
     for node in masterSet:
         if '#' in node:
@@ -133,13 +144,17 @@ def enrichment(id_name_dict):
 
     while len(masterSet) != 0:
         randomNode = masterSet.pop()
+        print(randomNode)
         qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
         tree, extra = creatTree(*qry)
         objects = extra[4]
+        children = []
+        for key in objects:
+            children = children + objects[key]
         commonParent = randomNode
-    masterSet = masterSet & set(objects)
+        masterSet = masterSet & set(children)
                     
-    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'OUTGOING', 9))
+    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'INCOMING', 9))
     return tree, extra
 
 ###
@@ -873,6 +888,7 @@ class heatmap_service(database_service):
 
     collTerms = None, 'collapse terms by character number' , 'collapse terms by hierarchy'
     collSources = None, 'collapse views to sources', 'collapse names to sources'
+    levels = 0, 1, 2, 3, 4, 5
 
     def __init__(self, summary_server):
         super().__init__()
@@ -954,7 +970,7 @@ class heatmap_service(database_service):
             term_id_order = sorted(hm_data) 
         if not src_id_order:
             src_id_order = sorted(hm_data[TOTAL_TERM_ID])
-        heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)
+        heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)[0]
 
     @sanitize_input
     def get_prov_from_id(self, hm_id):
@@ -1194,7 +1210,7 @@ class heatmap_service(database_service):
         """ consturct a csv file on the fly for download response """
         #this needs access id->name mappings
         #pretty sure I already have this written?
-        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
+        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)[0]
         term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
         src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
         term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
@@ -1227,7 +1243,7 @@ class heatmap_service(database_service):
 
     def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
 
-        matrix = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
+        matrix, row_term_relation = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         limit = 1000
         if len(matrix) > limit:
             #return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
@@ -1240,6 +1256,11 @@ class heatmap_service(database_service):
         if title.endswith('.png'):
             title = title[:-4]
 
+        row_names = []
+        for i in range(len(matrix)):
+            row_names.append(row_term_relation[i])
+
+        """
         row_names2 = []
         for item in term_name_order:
             if item not in row_names2:
@@ -1247,6 +1268,7 @@ class heatmap_service(database_service):
         row_names = []
         while len(row_names2) != 0:
             row_names.append(row_names2.pop(row_names2.index(min(row_names2))))
+        """
         
         #row_names = term_name_order
         col_names = src_name_order
@@ -1323,6 +1345,7 @@ class heatmap_service(database_service):
         select_mapping = {  # store this until... when?
                         'collTerms':(self.collTerms, ),
                         'collSources':(self.collSources, ),
+                        'levels':(self.levels, ),
                         'sortTypeTerms':(self.sort_types, ),
                         'sortTypeSrcs':(self.sort_types, ),
                         'sortTerms':(self.sort_terms, ),
@@ -1346,7 +1369,7 @@ class heatmap_service(database_service):
 
 
     def output(self, heatmap_id, filetype, sortTerms=None, sortSources=None,  # FIXME probably want to convert the Nones for sorts to lists?
-               collTerms=None, collSources=None, idSortTerms=None, idSortSources=None,
+               collTerms=None, collSources=None, levels=0, idSortTerms=None, idSortSources=None,
                ascTerms=True, ascSources=True): 
         """
             Provide a single API for all output types.
@@ -1387,7 +1410,7 @@ class heatmap_service(database_service):
         if term_coll_function:
             if term_coll_function == sCollByTermParent:
                 treeOutput = enrichment(term_id_name_dict)
-                term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, treeOutput, 2)
+                term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, treeOutput, int(levels))
             else: 
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)
             if idSortSources != None:
@@ -1399,8 +1422,6 @@ class heatmap_service(database_service):
                             raise NameError('Identifier %s unknown!' % idSortSource)
         else:
             term_id_coll_dict = None
-
-        print(term_id_name_dict)
 
         # sources
         if collSources == 'cheese':
