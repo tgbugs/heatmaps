@@ -420,6 +420,7 @@ def hm_explore(hm_id):
         '<form action=submit/{hm_id} method=POST enctype=multipart/form-data target="_blank">',
             '<h3>Collapse options:</h3>',
             '{collTerms}',
+            '{levels}',
             '{collSources} <br>',
 
             '<div id={hier} style="display:none;">',

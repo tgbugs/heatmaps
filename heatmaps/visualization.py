@@ -173,7 +173,6 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
             key_collections_dict["No identifiers"].add(term)
             new_id_name_dict["No identifiers"].add(id_name_dict[term])
 
-    print(new_id_name_dict)
     return dict(key_collections_dict), dict(new_id_name_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 
@@ -203,6 +202,15 @@ def applyCollapse(heatmap_data, key_collections_dict, term_axis=False):
                     if source in counts_dict:
                         new_counts_dict[new_source] += counts_dict[source]
             output[term] = dict(new_counts_dict)
+
+    for term, counts_dict in heatmap_data.items():
+        new_counts_dict = defaultdict(lambda :0)
+        for new_source, collection in key_collections_dict.items():
+            for source in collection:
+                if source in counts_dict:
+                    new_counts_dict[new_source] += counts_dict[source]
+        output[term] = dict(new_counts_dict)
+
     return output
 
 def apply_order(dict_, key_order):
