@@ -334,6 +334,7 @@ def hm_explore(hm_id):
 
     js0 = """    <script>
     window.onload = function (){jso}
+    document.getElementById("collTerms").addEventListener("change", showLevel, false)
     document.getElementById("sortTerms").addEventListener("change", showTerms, false)
     document.getElementById("sortSources").addEventListener("change", showSources, false)
     document.getElementById("sortTerms2").addEventListener("change", showTerms2, false)
@@ -344,11 +345,21 @@ def hm_explore(hm_id):
     var idSort = {idSortOps};
     var idRef = {idRefOps};
 
+    var style_hier = document.getElementById("{hier}").style
     var style_any = document.getElementById("{anysort}").style
     var style_iss = document.getElementById("{iss}").style
     var style_irs = document.getElementById("{irs}").style
     var style_ist = document.getElementById("{ist}").style
     var style_irt = document.getElementById("{irt}").style
+
+    function showLevel(){jso}
+        if (style_hier["display"] == ""){jso}
+            style_hier["display"] = "none"
+        {jsc}
+        else {jso}
+            style_hier["display"] = ""
+        {jsc}
+    {jsc}
 
     function showTerms(){jso}
         if (idSort.indexOf(this.value) > -1){jso}
@@ -409,8 +420,12 @@ def hm_explore(hm_id):
         '<form action=submit/{hm_id} method=POST enctype=multipart/form-data target="_blank">',
             '<h3>Collapse options:</h3>',
             '{collTerms}',
-            '{levels}',
             '{collSources} <br>',
+
+            '<div id={hier} style="display:none;">',
+            '{levels}',
+            '</div>',
+        
             '<h3>Sorting Options:</h3>',
             '{sortTypeTerms}',
             '{sortTypeSrcs} <br>',

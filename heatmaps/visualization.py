@@ -161,6 +161,8 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
         for key in tree:
             root = key
             restOfTree = tree[key]
+            if root == None:
+                root = "Thing"
         for term in term_to_tree.keys():
             if term_to_tree[term] == treeNumber:
                 key_collections_dict[root].add(term)
@@ -170,7 +172,8 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
         if term not in term_to_tree:
             key_collections_dict["No identifiers"].add(term)
             new_id_name_dict["No identifiers"].add(id_name_dict[term])
-                
+
+    print(new_id_name_dict)
     return dict(key_collections_dict), dict(new_id_name_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 

@@ -128,19 +128,7 @@ def enrichment(id_name_dict):
     for setOfNodes in listOfSetOfNodes:
         masterSet = masterSet & setOfNodes
 
-    try:
-        masterSet.remove('http://www.w3.org/2002/07/owl#Thing')
-    except KeyError:
-        pass
     masterSet.remove('CYCLE DETECTED DERPS')
-    
-    toFilter = []
-    for node in masterSet:
-        if '#' in node:
-            toFilter.append(node)
-
-    for node in toFilter:
-        masterSet.remove(node)
 
     while len(masterSet) != 0:
         randomNode = masterSet.pop()
@@ -1324,6 +1312,7 @@ class heatmap_service(database_service):
             'time':time,
             'date':date,
             'expansion':expansion,
+            'hier':'nameforhier0',
             'anysort':'name1', # FIXME better naming here?
             'ist':'name2',
             'irt':'name3',
@@ -1338,6 +1327,8 @@ class heatmap_service(database_service):
             'idSortOps':str(self.sort_other).replace("'",'"'),
             'idRefOps':str(self.sort_same).replace("'",'"'),
         }
+        print("IdSortOps")
+        print(explore_fields['idSortOps'])
 
         srcs = sorted([(k, ' '.join(v)) for k, v in self.resources.items()], key=lambda a: a[1].lower())
         src_ids, src_names = [a for a in zip(*srcs)]
