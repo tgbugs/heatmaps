@@ -14,7 +14,8 @@
 
 import gzip
 from os import environ
-from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort
+from os.path import expanduser
+from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
 if environ.get('HEATMAP_PROD',None):
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
@@ -482,9 +483,70 @@ def hm_explore(hm_id):
     out.headers['Content-Encoding'] = 'gzip'
     return out
 
+@hmapp.route(ext_path + "/interactive/<hm_id>", methods = ['GET'])
+def hm_interactive(hm_id):
+    html = """<!doctype html>
+    <head>
+        <style>{css_min}</style>
+        <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+        <script>{jheatmap_min}</script>
+        <script>{heatmap_js}</script>
+    </head>
+    <body>
+        <div id="heatmap"></div>
+    </body>"""
+    heatmap_js = """
+$(document).ready(function () {
+        $('#heatmap').heatmap(
+        {
+            data: {
+                values: new jheatmap.readers.TableHeatmapReader({ url: "../prov/%s.tsv" })
+            },
+ 
+            init: function (heatmap) {
+ 
+                heatmap.cols.zoom = 12;
+                //heatmap.cols.labelSize = 100;
+                heatmap.rows.zoom = 12;
+                //heatmap.rows.labelSize = 100;
 
-#@hmapp.route(hmext + "terms", methods = ['GET','POST'])
-@hmapp.route(ext_path + "/terms", methods = ['GET'])
+                // Decorators
+                heatmap.cells.decorators["count"] = new jheatmap.decorators.Heat({
+                                minValue: 0.0,
+                                midValue: 9999,
+                                maxValue: 99999,
+                                minColor: [85, 0, 136],
+                                nullColor: [255,255,255],
+                                maxColor: [255, 204, 0],
+                                midColor: [240,240,240]
+                                //values: ["0","1","2","3"],
+                                //colors : ["white","green","blue","red"]
+                });
+ 
+                heatmap.cells.decorators["term"] = new jheatmap.decorators.Categorical({
+                                values: ["-2","2"],
+                                colors : ["blue","red"]
+                });
+ 
+                heatmap.cells.decorators["source"] = new jheatmap.decorators.Heat({
+                                minValue: -2,
+                                midValue: 0,
+                                maxValue: 2,
+                                minColor: [85, 0, 136],
+                                nullColor: [255,255,255],
+                                maxColor: [255, 204, 0],
+                                midColor: [240,240,240]
+                });
+            }
+        });
+    });""" % hm_id
+    with open(expanduser('~/git/jheatmap/site/js/jheatmap-1.0.0-min.js'),'rt') as f:
+        jheatmap_min = f.read()
+    with open(expanduser('~/git/jheatmap/site/css/jheatmap-1.0.0-min.css'),'rt') as f:
+        css_min = f.read()
+    return html.format(css_min=css_min, jheatmap_min=jheatmap_min, heatmap_js=heatmap_js)
+
+@hmapp.route(ext_path + "/terms", methods = ['GET']) #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
 def hm_terms():
     #if request.method == 'POST':
         #return terms_form.data_received()
