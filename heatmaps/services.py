@@ -93,58 +93,6 @@ LITERATURE_ID = 'nlx_82958'  # FIXME pls no hardcode this (is a lie too)
 TOTAL_TERM_ID = 'federation_totals'  # DO NOT CHANGE
 TOTAL_TERM_ID_NAME = 'Federation Totals'
 
-
-def enrichment(id_name_dict):
-    """
-    Takes in terms and outputs a tree with the common parent as the root
-    Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
-    Output: tree, extra (the same type of stuff that comes from creatTree)
-    """
-    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
-
-    try:
-        id_name_dict.pop(TOTAL_TERM_ID)
-    except KeyError:
-        pass
-    
-    # Make trees for each term. Make a masterSet from the terms
-    listOfSetOfNodes = []
-    for term in id_name_dict:
-        if term == id_name_dict[term]:
-            identifier = TERM_SERVER.term_id_expansion(term)[1]
-        else:
-            identifier = term
-        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
-        try:
-            tree, extra = creatTree(*queryForTerm)
-            nodes = extra[2]
-            setOfNodes = set(nodes)
-            listOfSetOfNodes.append(setOfNodes)
-        except:
-            pass
-
-    # Make masterSet, which has all the nodes the terms share in common in their trees
-    masterSet = listOfSetOfNodes[0]
-    for setOfNodes in listOfSetOfNodes:
-        masterSet = masterSet & setOfNodes
-
-    masterSet.remove('CYCLE DETECTED DERPS')
-
-    while len(masterSet) != 0:
-        randomNode = masterSet.pop()
-        print(randomNode)
-        qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
-        tree, extra = creatTree(*qry)
-        objects = extra[4]
-        children = []
-        for key in objects:
-            children = children + objects[key]
-        commonParent = randomNode
-        masterSet = masterSet & set(children)
-                    
-    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'INCOMING', 9))
-    return tree, extra
-
 ###
 #   Decorators
 ###
@@ -1490,6 +1438,143 @@ def int_cast(dict):
     return {k:int(v) for k,v in dict.items()}
 def str_cast(dict):
     return {k:str(v) for k,v in dict.items()}
+
+def enrichment(id_name_dict):
+    """
+    Takes in terms and outputs a tree with the common parent as the root
+    Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
+    Output: tree, extra (the same type of stuff that comes from creatTree)
+    """
+    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
+
+    try:
+        id_name_dict.pop(TOTAL_TERM_ID)
+    except KeyError:
+        pass
+    
+    # Make trees for each term. Make a masterSet from the terms
+    listOfSetOfNodes = []
+    for term in id_name_dict:
+        if term == id_name_dict[term]:
+            identifier = TERM_SERVER.term_id_expansion(term)[1]
+        else:
+            identifier = term
+        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
+        try:
+            tree, extra = creatTree(*queryForTerm)
+            nodes = extra[2]
+            setOfNodes = set(nodes)
+            listOfSetOfNodes.append(setOfNodes)
+        except:
+            pass
+
+    # Make masterSet, which has all the nodes the terms share in common in their trees
+    masterSet = listOfSetOfNodes[0]
+    for setOfNodes in listOfSetOfNodes:
+        masterSet = masterSet & setOfNodes
+
+    masterSet.remove('CYCLE DETECTED DERPS')
+
+    while len(masterSet) != 0:
+        randomNode = masterSet.pop()
+        print(randomNode)
+        qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
+        tree, extra = creatTree(*qry)
+        objects = extra[4]
+        children = []
+        for key in objects:
+            children = children + objects[key]
+        commonParent = randomNode
+        masterSet = masterSet & set(children)
+                    
+    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'INCOMING', 9))
+    return tree, extra
+
+def sortDict(heatmap_data):
+    """
+    Creates a dictionary that shows how terms should be sorted based on sort method. 
+    Input: heatmap_data (the same heatmap_data that goes into the function "output"). It's a dictionary with a dictionary as values. 
+    Output: dictionary in the format
+        {sort_method0: {term_id0: 0, term_id1: 2, term_id2: 1}, 
+        sort_method1: {term_id0: 1, term_id1: 2, term_id2: 0}, 
+        sort_method2: term_id0: 2, term_id1: 1, term_id2: 0}}
+        with the numbers representing each term's position when sorted through. The positions are zero-indexed. 
+    """
+    output = defaultdict(dict)
+    term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
+
+    # All sort methods: alpha_id, alpha_term, frequency, identifier, total_count, name_length, jaccard, num_common_same_axis, norm_from_same_axis, number_synonyms, number_edges
+
+    # Sort: alpha_id. Sorting alphabetically by identifier
+    identifier_list = []
+    for term in heatmap_data:
+        if term == term_id_name_dict[term]:
+            identifier = TERM_SERVER.term_id_expansion(term)[1]
+        else:
+            identifier = term
+        identifier_list.append(identifier)
+    identifier_list = sorted(identifier_list, key=str.lower)    # Sort identifier_list by alphabetical order, regardless of upper/lowercase
+    for index, identifier in enumerate(identifier_list):
+        output["alpha_id"][term_id_name_dict[identifier]] = index
+
+    # Sort: alpha_term. Sorting alphabetically by term name
+    term_list = []
+    for identifier in heatmap_data:
+        term = term_id_name_dict[identifier]
+        term_list.append(term)
+    term_list = sorted(term_list, key=str.lower)
+    for index, term in enumerate(term_list):
+        output["alpha_term"][term] = index
+
+    # Sort: frequency. Sorting by how many sources a term appears in, divided by the total number of sources
+    # Sort: total_count. Sort by the total number of times a term shows up across all sources
+    term_frequency_count_list = []
+    for term in heatmap_data:
+        appearances = 0
+        total = 0
+        count = 0
+        for source in heatmap_data[term]:
+            if heatmap_data[term][source] > 0:
+                appearances += 1
+            total += 1
+            count += heatmap_data[term][source]
+        frequency = appearances / total
+        term_frequency_count_list.append((term, frequency, count))
+    term_frequency_list = sorted(term_frequency_count_list, key=lambda tup: tup[1])
+    term_count_list = sorted(term_frequency_count_list, key=lambda tup: tup[2])
+    for index, tup in enumerate(term_frequency_list):
+        output["frequency"][term_id_name_dict[tup[0]]] = index
+    for index, tup in enumerate(term_count_list):
+        output["total_count"][term_id_name_dict[tup[0]]] = index
+
+    # Sort: name_length. Sort by length of term name, from smallest to greatest
+    name_length_list = []
+    for term in term_list:
+        name_length_list.append((term, len(term)))
+    name_length_list = sorted(name_length_list, key=lambda tup: tup[1])
+    for index, tup in enumerate(name_length_list):
+        output["name_length"][tup[0]] = index
+
+    # Sort: number_synonyms. Sort by number of synonyms each term has
+    # Sort: number_edges. Sort by number of edges each term has in the graph
+    term_edge_syn_list = []
+    for term in heatmap_data:
+        putative_term, curie, label, syns = self.term_server.term_id_expansion(term)
+            if curie:
+                curie = curie.replace('#', '%23')
+                result = graph.getNeighbors(curie, depth=1, direction='BOTH')
+                edges = result['edges']
+                term_edge_syn_list.append((heatmap_data[term], len(edges), len(syns)))
+            else:
+                term_edge_syn_list.append((heatmap_data[term], 0, len(syns)))
+    term_edge_list = sorted(term_edge_syn_list, key=lambda tup: tup[1])
+    term_syn_list = sorted(term_edge_syn_list, key=lambda tup: tup[2])
+    for index, tup in enumerate(term_edge_list):
+        output["number_edges"][tup[0]] = index
+    for index, tup in enumerate(term_syn_list):
+        output["number_synonyms"][tup[0]] = index
+
+    return output
 
 ###
 #   main
