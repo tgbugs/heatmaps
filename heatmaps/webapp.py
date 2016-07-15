@@ -199,9 +199,11 @@ def do_terms(terms, filename=None):
             <!doctype html>
             <title>Submit</title>
             When your job is finished your heatmap can be downloaded as
-            a png, a csv, an html table, or as a json file at:
+            a png, a csv, a tsv, an html table, or as a json file at:
             <br><br>
             <a href={url}.csv>{url}.csv</a>
+            <br>
+            <a href={url}.tsv>{url}.tsv</a>
             <br>
             <a href={url}.html>{url}.html</a>
             <br>
@@ -216,7 +218,6 @@ def do_terms(terms, filename=None):
             as long as you know your heatmap id which is {id}.
             """.format(url=base_url + '/prov/' + str(hp_id), id=hp_id, exp_url=base_url + '/explore/' + str(hp_id))
     return output
-
 
 def data_from_id(hm_id, filetype, collTerms=None, collSources=None,
                  sortTerms=None, sortSources=None,
@@ -235,6 +236,7 @@ def data_from_id(hm_id, filetype, collTerms=None, collSources=None,
         response = make_response(data)
         response.headers['Content-Disposition'] = '%sfilename = %s' % (attachment, filename)
         response.mimetype = mimetype
+        #response.mimetype = 'text/plain'
         return response
     else:
         return abort(404)
@@ -582,7 +584,7 @@ def docs():
     <h1>NIF heatmaps documentation</h1>
     To view an existing heatmap append the heatmapid to the following url: <br>
     <a href={prov_url}>{prov_url}</a><br>
-    Currently supported filetypes are csv, html, json, and png. <br>
+    Currently supported filetypes are csv, tsv, html, json, and png. <br>
     Example: <a href={prov_url}0.png>{prov_url}0.png</a> (note that this heatmap doesn't actually exist) <br>
     <br>
     To explore an existing heatmap append the heatmapid to the following url: <br>

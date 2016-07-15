@@ -815,9 +815,10 @@ class heatmap_service(database_service):
     port = 5432
     hstore = True
     TERM_MIN = 5
-    supported_filetypes = None, 'csv', 'html', 'json', 'png'  # need for output
+    supported_filetypes = None, 'csv', 'tsv', 'html', 'json', 'png'  # need for output
     mimetypes = {None:'text/plain',
                  'csv':'text/csv',
+                 'tsv':'text/tsv',
                  'html':'text/html',
                  'json':'application/json',
                  'png':'image/png'}
@@ -837,6 +838,7 @@ class heatmap_service(database_service):
         self.output_map = {
             None:self.output_json,
             'csv':self.output_csv,
+            'tsv':self.output_tsv,
             'html':self.output_html,
             'json':self.output_json,
             'png':self.output_png,
@@ -1172,6 +1174,34 @@ class heatmap_service(database_service):
                 csv_string += line
 
         return csv_string, self.mimetypes['csv']
+
+    def output_tsv(self, heatmap_data, term_name_order, src_name_order, term_id_order,
+                   src_id_order, *args, sep=",", export_ids=True, **kwargs):
+        """ tsv file output for jheatmaps """
+        term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
+        src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
+        term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
+        src_id_order = ['"%s"' % n if sep in n else n for n in src_id_order]  # probably dont need this here
+
+        header = '\t'.join(('source', 'term', 'count'))
+        lines = []
+        print('HELLO WORLD')
+        max_count_len = 0  # because someone doesn't know how to write a natural sort
+        for term_name, term_id in zip(term_names, term_id_order):
+            inner = heatmap_data[term_id.strip('"')]
+            for src_name, src_id in zip(src_names, src_id_order):
+                if src_id in inner:
+                    count = str(inner[src_id])
+                    if len(count) > max_count_len:
+                        max_count_len = len(count)
+                else:
+                    count = '0'
+                proto_line = (src_name, term_name, count)
+                lines.append(proto_line)
+
+        formatstring = '{count:0>' + str(max_count_len) + '}'
+        lines = [header] + ['\t'.join((a, b, formatstring.format(count=c))) for a, b, c in lines]
+        return '\n'.join(lines), 'text/plain'
 
     def output_html(self, heatmap_data, term_name_order, src_name_order, term_id_order,
                    src_id_order, *args, sep=",", export_ids=True, **kwargs):
