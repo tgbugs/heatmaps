@@ -1179,36 +1179,39 @@ class heatmap_service(database_service):
                    src_id_order, *args, sep=",", export_ids=True, **kwargs):
         """ tsv file output for jheatmaps """
         # TODO include the metrics rows/cols (frequecy, jarccard, etc) in the TSV for more sorting options
+        max_count_len = 0  # because someone doesn't know how to write a natural sort
+        for term in term_id_order:
+            count = str(max([v for v in heatmap_data[term].values()]))
+            if len(count) > max_count_len:
+                max_count_len = len(count)
+        single_pad = '0' * (max_count_len - 1)
+
         term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
         src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
         term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
         src_id_order = ['"%s"' % n if sep in n else n for n in src_id_order]  # probably dont need this here
 
+        tab = '\t'
         header = '\t'.join(('source', 'term', 'count', 'link'))
-        lines = []
-        print('HELLO WORLD')
-        max_count_len = 0  # because someone doesn't know how to write a natural sort
+        lines = header
         for term_name, term_id in zip(term_names, term_id_order):
             inner = heatmap_data[term_id.strip('"')]
             for src_name, src_id in zip(src_names, src_id_order):
                 if src_id in inner:
                     count = str(inner[src_id])
-                    if len(count) > max_count_len:
-                        max_count_len = len(count)
+                    count = '0' * (max_count_len - len(count)) + count
                 else:
-                    count = '-'  # null works nicely here
+                    count = single_pad + '-'  # null works nicely here
                 if src_id == 'nlx_82958':
                     if count == '0':
-                        count = '-'  # literature is missed in check above
-                    link = '<a href="http://neuinfo.org/literature/search?q={term_id}">{count}</a>'.format(term_id=term_name, count=count)
+                        count = single_pad + '-'  # literature is missed in check above
+                    link = '<a href="http://neuinfo.org/literature/search?q='+term_id+'">'+count+'</a>'
                 else:
-                    link = '<a href="http://neuinfo.org/data/source/{src_id}/search?q={term_id}">{count}</a>'.format(src_id=src_id, term_id=term_name, count=count)
-                proto_line = (src_name, term_name, count, link)
-                lines.append(proto_line)
+                    link = '<a href="http://neuinfo.org/data/source/'+src_id+'/search?q='+term_id+'">'+count+'</a>'
+                proto_line = '\t'.join((src_name, term_name, count, link))
+                lines += '\n' + proto_line
 
-        formatstring = '{count:0>' + str(max_count_len) + '}'
-        lines = [header] + ['\t'.join((a, b, formatstring.format(count=c), l)) for a, b, c, l in lines]
-        return '\n'.join(lines), 'text/plain'
+        return lines, 'text/plain'
 
     def output_html(self, heatmap_data, term_name_order, src_name_order, term_id_order,
                    src_id_order, *args, sep=",", export_ids=True, **kwargs):
@@ -1225,12 +1228,13 @@ class heatmap_service(database_service):
             html_string += '<td>' + term_name + '</td>'
             for src_id in src_id_order:
                 count = heatmap_data[term_id][src_id] if src_id in heatmap_data[term_id] else 0
+                count = str(count)
                 html_string += '<td>'
                 datlit = 'data'
                 if src_id == 'nlx_82958':
-                    html_string += '<a href="http://neuinfo.org/literature/search?q={term_id}">{count}</a>'.format(term_id=term_name, count=count)
+                    html_string += '<a href="http://neuinfo.org/literature/search?q='+term_id+'">'+count+'</a>'
                 else:
-                    html_string += '<a href="http://neuinfo.org/data/source/{src_id}/search?q={term_id}">{count}</a>'.format(src_id=src_id, term_id=term_name, count=count)
+                    html_string += '<a href="http://neuinfo.org/data/source/'+src_id+'/search?q='+term_id+'">'+count+'</a>'
                 html_string += '</td>'
             html_string += '</tr>'
         html_string += '</table>'
