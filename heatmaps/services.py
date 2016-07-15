@@ -1178,12 +1178,13 @@ class heatmap_service(database_service):
     def output_tsv(self, heatmap_data, term_name_order, src_name_order, term_id_order,
                    src_id_order, *args, sep=",", export_ids=True, **kwargs):
         """ tsv file output for jheatmaps """
+        # TODO include the metrics rows/cols (frequecy, jarccard, etc) in the TSV for more sorting options
         term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
         src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
         term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
         src_id_order = ['"%s"' % n if sep in n else n for n in src_id_order]  # probably dont need this here
 
-        header = '\t'.join(('source', 'term', 'count'))
+        header = '\t'.join(('source', 'term', 'count', 'link'))
         lines = []
         print('HELLO WORLD')
         max_count_len = 0  # because someone doesn't know how to write a natural sort
@@ -1195,12 +1196,18 @@ class heatmap_service(database_service):
                     if len(count) > max_count_len:
                         max_count_len = len(count)
                 else:
-                    count = '0'
-                proto_line = (src_name, term_name, count)
+                    count = '-'  # null works nicely here
+                if src_id == 'nlx_82958':
+                    if count == '0':
+                        count = '-'  # literature is missed in check above
+                    link = '<a href="http://neuinfo.org/literature/search?q={term_id}">{count}</a>'.format(term_id=term_name, count=count)
+                else:
+                    link = '<a href="http://neuinfo.org/data/source/{src_id}/search?q={term_id}">{count}</a>'.format(src_id=src_id, term_id=term_name, count=count)
+                proto_line = (src_name, term_name, count, link)
                 lines.append(proto_line)
 
         formatstring = '{count:0>' + str(max_count_len) + '}'
-        lines = [header] + ['\t'.join((a, b, formatstring.format(count=c))) for a, b, c in lines]
+        lines = [header] + ['\t'.join((a, b, formatstring.format(count=c), l)) for a, b, c, l in lines]
         return '\n'.join(lines), 'text/plain'
 
     def output_html(self, heatmap_data, term_name_order, src_name_order, term_id_order,

@@ -513,27 +513,10 @@ $(document).ready(function () {
                 // Decorators
                 heatmap.cells.decorators["count"] = new jheatmap.decorators.Heat({
                                 minValue: 0.0,
-                                midValue: 9999,
+                                midValue: 999,
                                 maxValue: 99999,
                                 minColor: [85, 0, 136],
-                                nullColor: [255,255,255],
-                                maxColor: [255, 204, 0],
-                                midColor: [240,240,240]
-                                //values: ["0","1","2","3"],
-                                //colors : ["white","green","blue","red"]
-                });
- 
-                heatmap.cells.decorators["term"] = new jheatmap.decorators.Categorical({
-                                values: ["-2","2"],
-                                colors : ["blue","red"]
-                });
- 
-                heatmap.cells.decorators["source"] = new jheatmap.decorators.Heat({
-                                minValue: -2,
-                                midValue: 0,
-                                maxValue: 2,
-                                minColor: [85, 0, 136],
-                                nullColor: [255,255,255],
+                                nullColor: [255,128,128],
                                 maxColor: [255, 204, 0],
                                 midColor: [240,240,240]
                 });
