@@ -25,6 +25,15 @@ else:
 from .services import heatmap_service, summary_service
 
 ###
+#   Static resources to load once
+###
+
+with open(expanduser('~/git/jheatmap/site/js/jheatmap-1.0.0-min.js'),'rt') as f:
+    jheatmap_min = f.read()
+with open(expanduser('~/git/jheatmap/site/css/jheatmap-1.0.0-min.css'),'rt') as f:
+    css_min = f.read()
+
+###
 #   Templates (FIXME extract)
 ###
 
@@ -262,6 +271,18 @@ terms_form = Form("NIF heatmaps from terms",
 #   Routes and implementations
 ###
 
+@hmapp.route(ext_path + "/static/jh.js", methods = ['GET'])
+def hm_jhjs():
+    response = make_response(jheatmap_min)
+    response.mimetype = 'text/javascript'
+    return response
+
+@hmapp.route(ext_path + "/static/jh.css", methods = ['GET'])
+def hm_jhcss():
+    response = make_response(css_min)
+    response.mimetype = 'text/css'
+    return response
+
 @hmapp.route(ext_path + "/explore/submit/<hm_id>", methods = ['POST'])
 def hm_viz(hm_id):
     sortTerms = request.form['sortTerms']
@@ -487,17 +508,17 @@ def hm_explore(hm_id):
 def hm_interactive(hm_id):
     html = """<!doctype html>
     <head>
-        <style>{css_min}</style>
+        <link rel="stylesheet" href="{css_min}">
         <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
-        <script>{jheatmap_min}</script>
+        <script type="text/javascript" src="{jheatmap_min}"></script>
         <script>{heatmap_js}</script>
     </head>
     <body>
         <div id="heatmap"></div>
     </body>"""
     heatmap_js = """
-$(document).ready(function () {
-        $('#heatmap').heatmap(
+    $(document).ready(function () {
+    $('#heatmap').heatmap(
         {
             data: {
                 values: new jheatmap.readers.TableHeatmapReader({ url: "../prov/%s.tsv" })
@@ -522,12 +543,10 @@ $(document).ready(function () {
                 });
             }
         });
-    });""" % hm_id
-    with open(expanduser('~/git/jheatmap/site/js/jheatmap-1.0.0-min.js'),'rt') as f:
-        jheatmap_min = f.read()
-    with open(expanduser('~/git/jheatmap/site/css/jheatmap-1.0.0-min.css'),'rt') as f:
-        css_min = f.read()
-    return html.format(css_min=css_min, jheatmap_min=jheatmap_min, heatmap_js=heatmap_js)
+    });\n""" % hm_id
+    jhjs = '../static/jh.js'
+    jhcss = '../static/jh.css'
+    return html.format(css_min=jhcss, jheatmap_min=jhjs, heatmap_js=heatmap_js)
 
 @hmapp.route(ext_path + "/terms", methods = ['GET']) #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
 def hm_terms():
