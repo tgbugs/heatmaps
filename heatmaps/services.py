@@ -1419,6 +1419,130 @@ class heatmap_service(database_service):
 
         return representation, filename, mimetype
 
+    def sortDict(heatmap_data):
+        """
+        Creates a dictionary that shows how terms should be sorted based on sort method. 
+        Input: heatmap_data (the same heatmap_data that goes into the function "output"). It's a dictionary with a dictionary as values. 
+        Output: two dictionaries. termOutput would look something like this:
+            {sort_method0: {term_id0: 0, term_id1: 2, term_id2: 1}, 
+            sort_method1: {term_id0: 1, term_id1: 2, term_id2: 0}, 
+            sort_method2: term_id0: 2, term_id1: 1, term_id2: 0}}
+            with the numbers representing each term's position when sorted through. The positions are zero-indexed. 
+            sourceOutput follows the same format, but with sources instead of terms
+        """
+        termOutput = defaultdict(dict)
+        sourceOutput = defaultdict(dict)
+        term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
+        term_id_name_dict.pop(TOTAL_TERM_ID)
+        src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
+
+        # All possible sort methods: alpha_id, alpha_term, frequency, identifier, total_count, name_length, jaccard, num_common_same_axis, norm_from_same_axis, number_synonyms, number_edges
+        # Yet to be added: jaccard, identifier, num_common_same_axis, norm_from_same_axis
+
+        # Sort: alpha_id. Sorting alphabetically by identifier
+        term_identifier_list = []
+        src_identifier_list = []
+
+        for term in term_id_name_dict:
+            if term == term_id_name_dict[term]:
+                identifier = TERM_SERVER.term_id_expansion(term)[1]
+            else:
+                identifier = term
+            term_identifier_list.append(identifier)
+        for source in src_id_name_dict:
+            src_identifier_list.append(source)
+
+        term_identifier_list = sorted(term_identifier_list, key=str.lower)    # Sort identifier_list by alphabetical order, regardless of upper/lowercase
+        src_identifier_list = sorted(src_identifier_list, key=str.lower)
+
+        for index, identifier in enumerate(term_identifier_list):
+            termOutput["alpha_id"][term_id_name_dict[identifier]] = index
+        for index, source in enumerate(src_identifier_list):
+            sourceOutput["alpha_id"][src_id_name_dict[source]] = index
+
+        # Sort: alpha_term. Sorting alphabetically by term name
+        term_list = []
+        source_list = []
+
+        for identifier in term_id_name_dict:
+            term_list.append(term_id_name_dict[identifier])
+        for source_id in src_id_name_dict:
+            source_list.append(src_id_name_dict[source_id])
+
+        term_list = sorted(term_list, key=str.lower)
+        source_list = sorted(source_list, key=str.lower)
+
+        for index, term in enumerate(term_list):
+            termOutput["alpha_term"][term] = index
+        for index, source in enumerate(source_list):
+            sourceOutput["alpha_term"][source] = index
+
+        # Sort: frequency. Sorting by how many sources a term appears in, divided by the total number of sources
+        # Sort: total_count. Sort by the total number of times a term shows up across all sources
+        term_frequency_count_list = []
+        src_frequency_count_list = []
+        for term in term_id_name_dict:
+            frequency = len(v for v in heatmap_data[term].values() if v > 0)
+            count = sum(v for v in heatmap_data[term].values() if v > 0)
+            term_frequency_count_list.append((term_id_name_dict[term], frequency, count))
+        for source_id in src_id_name_dict:
+            frequency = len(v for v in heatmap_data.values() if source_id in v)
+            count = sum(v[source_id] for v in heatmap_data.values() if source_id in v)
+            src_frequency_count_list.append((src_id_name_dict[source_id], frequency, count))
+
+        term_frequency_list = sorted(term_frequency_count_list, key=lambda tup: tup[1])
+        term_count_list = sorted(term_frequency_count_list, key=lambda tup: tup[2])
+        src_frequency_list = sorted(src_frequency_count_list, key=lambda tup: tup[1])
+        src_count_list = sorted(term_frequency_count_list, key=lambda tup: tup[2])
+
+        for index, tup in enumerate(term_frequency_list):
+            termOutput["frequency"][tup[0]] = index
+        for index, tup in enumerate(term_count_list):
+            termOutput["total_count"][tup[0]] = index
+        for index, tup in enumerate(src_frequency_list):
+            sourceOutput["frequency"][tup[0]] = index
+        for index, tup in enumerate(src_count_list):
+            sourceOutput["total_count"][tup[0]] = index
+
+
+        # Sort: name_length. Sort by length of term name, from smallest to greatest
+        name_length_list = []
+        src_length_list = []
+        for term in term_list:
+            name_length_list.append((term, len(term)))
+        for source in source_list:
+            src_length_list.append((source, len(source)))
+
+        name_length_list = sorted(name_length_list, key=lambda tup: tup[1])
+        src_length_list = sorted(src_length_list, key=lambda tup: tup[1])
+
+        for index, tup in enumerate(name_length_list):
+            termOutput["name_length"][tup[0]] = index
+        for index, tup in enumerate(src_length_list):
+            sourceOutput["name_length"][tup[0]] = index
+
+        # Sort: number_synonyms. Sort by number of synonyms each term has
+        # Sort: number_edges. Sort by number of edges each term has in the graph
+        # These two sort methods are unique to terms only. Sources cannot be sorted this way
+        term_edge_syn_list = []
+        for term in term_id_name_dict:
+            putative_term, curie, label, syns = self.term_server.term_id_expansion(term)
+                if curie:
+                    curie = curie.replace('#', '%23')
+                    result = graph.getNeighbors(curie, depth=1, direction='BOTH')
+                    edges = result['edges']
+                    term_edge_syn_list.append((term_id_name_dict[term], len(edges), len(syns)))
+                else:
+                    term_edge_syn_list.append((term_id_name_dict[term], 0, len(syns)))
+        term_edge_list = sorted(term_edge_syn_list, key=lambda tup: tup[1])
+        term_syn_list = sorted(term_edge_syn_list, key=lambda tup: tup[2])
+        for index, tup in enumerate(term_edge_list):
+            termOutput["number_edges"][tup[0]] = index
+        for index, tup in enumerate(term_syn_list):
+            termOutput["number_synonyms"][tup[0]] = index
+
+        return termOutput, sourceOutput
+
     def __repr__(self):
         a = str(self.resources).replace('),','),\n')+'\n'
         b = repr(self.term_count_dict).replace(',',',\n')
@@ -1490,91 +1614,7 @@ def enrichment(id_name_dict):
     tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'INCOMING', 9))
     return tree, extra
 
-def sortDict(heatmap_data):
-    """
-    Creates a dictionary that shows how terms should be sorted based on sort method. 
-    Input: heatmap_data (the same heatmap_data that goes into the function "output"). It's a dictionary with a dictionary as values. 
-    Output: dictionary in the format
-        {sort_method0: {term_id0: 0, term_id1: 2, term_id2: 1}, 
-        sort_method1: {term_id0: 1, term_id1: 2, term_id2: 0}, 
-        sort_method2: term_id0: 2, term_id1: 1, term_id2: 0}}
-        with the numbers representing each term's position when sorted through. The positions are zero-indexed. 
-    """
-    output = defaultdict(dict)
-    term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
 
-    # All sort methods: alpha_id, alpha_term, frequency, identifier, total_count, name_length, jaccard, num_common_same_axis, norm_from_same_axis, number_synonyms, number_edges
-
-    # Sort: alpha_id. Sorting alphabetically by identifier
-    identifier_list = []
-    for term in heatmap_data:
-        if term == term_id_name_dict[term]:
-            identifier = TERM_SERVER.term_id_expansion(term)[1]
-        else:
-            identifier = term
-        identifier_list.append(identifier)
-    identifier_list = sorted(identifier_list, key=str.lower)    # Sort identifier_list by alphabetical order, regardless of upper/lowercase
-    for index, identifier in enumerate(identifier_list):
-        output["alpha_id"][term_id_name_dict[identifier]] = index
-
-    # Sort: alpha_term. Sorting alphabetically by term name
-    term_list = []
-    for identifier in heatmap_data:
-        term = term_id_name_dict[identifier]
-        term_list.append(term)
-    term_list = sorted(term_list, key=str.lower)
-    for index, term in enumerate(term_list):
-        output["alpha_term"][term] = index
-
-    # Sort: frequency. Sorting by how many sources a term appears in, divided by the total number of sources
-    # Sort: total_count. Sort by the total number of times a term shows up across all sources
-    term_frequency_count_list = []
-    for term in heatmap_data:
-        appearances = 0
-        total = 0
-        count = 0
-        for source in heatmap_data[term]:
-            if heatmap_data[term][source] > 0:
-                appearances += 1
-            total += 1
-            count += heatmap_data[term][source]
-        frequency = appearances / total
-        term_frequency_count_list.append((term, frequency, count))
-    term_frequency_list = sorted(term_frequency_count_list, key=lambda tup: tup[1])
-    term_count_list = sorted(term_frequency_count_list, key=lambda tup: tup[2])
-    for index, tup in enumerate(term_frequency_list):
-        output["frequency"][term_id_name_dict[tup[0]]] = index
-    for index, tup in enumerate(term_count_list):
-        output["total_count"][term_id_name_dict[tup[0]]] = index
-
-    # Sort: name_length. Sort by length of term name, from smallest to greatest
-    name_length_list = []
-    for term in term_list:
-        name_length_list.append((term, len(term)))
-    name_length_list = sorted(name_length_list, key=lambda tup: tup[1])
-    for index, tup in enumerate(name_length_list):
-        output["name_length"][tup[0]] = index
-
-    # Sort: number_synonyms. Sort by number of synonyms each term has
-    # Sort: number_edges. Sort by number of edges each term has in the graph
-    term_edge_syn_list = []
-    for term in heatmap_data:
-        putative_term, curie, label, syns = self.term_server.term_id_expansion(term)
-            if curie:
-                curie = curie.replace('#', '%23')
-                result = graph.getNeighbors(curie, depth=1, direction='BOTH')
-                edges = result['edges']
-                term_edge_syn_list.append((heatmap_data[term], len(edges), len(syns)))
-            else:
-                term_edge_syn_list.append((heatmap_data[term], 0, len(syns)))
-    term_edge_list = sorted(term_edge_syn_list, key=lambda tup: tup[1])
-    term_syn_list = sorted(term_edge_syn_list, key=lambda tup: tup[2])
-    for index, tup in enumerate(term_edge_list):
-        output["number_edges"][tup[0]] = index
-    for index, tup in enumerate(term_syn_list):
-        output["number_synonyms"][tup[0]] = index
-
-    return output
 
 ###
 #   main
