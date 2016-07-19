@@ -1252,9 +1252,6 @@ class heatmap_service(database_service):
 
     def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
 
-        termDict, srcDict = self.sortDict(heatmap_data)
-        heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order  = self.addSortToData(heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order, termDict, srcDict)
-        
         matrix, row_term_relation = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         limit = 1000
         if len(matrix) > limit:
@@ -1491,6 +1488,10 @@ class heatmap_service(database_service):
             term_id_order.remove(TOTAL_TERM_ID)
         """
 
+        if (filetype == "png" or filetype == "tsv"):
+            termDict, srcDict = self.sortDict(heatmap_data)
+            heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order  = self.addSortToData(heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order, termDict, srcDict)
+        
         representation, mimetype = output_function(heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, title=filename)
 
         return representation, filename, mimetype
