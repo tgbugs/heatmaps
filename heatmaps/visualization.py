@@ -263,7 +263,7 @@ def dict_to_matrix(tdict_sdict, term_id_order, src_id_order, TOTAL_TERM_ID, *arg
     """
     i = 0
     row_term_relation = {}    # This dictionary will take the row number as a key and output the corresponding term
-    for key in tdict_sdict.keys():
+    for key in term_id_order:
         row = apply_order(tdict_sdict[key], src_id_order)
         matrix[i,:] = row
         row_term_relation[i] = key
