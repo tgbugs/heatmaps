@@ -13,7 +13,7 @@ import json
 from functools import wraps
 from os import environ, path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 import requests
 import psycopg2 as pg
@@ -828,6 +828,9 @@ class heatmap_service(database_service):
     collSources = None, 'collapse views to sources', 'collapse names to sources'
     levels = 0, 1, 2, 3, 4, 5
 
+    termSortMethods = ('sort_alpha_id', 'sort_alpha_term', 'sort_frequency', 'sort_total_count', 'sort_name_length', 'sort_number_synonyms', 'sort_number_edges')
+    srcSortMethods = ('sort_alpha_id', 'sort_alpha_term', 'sort_frequency', 'sort_total_count', 'sort_name_length')
+
     def __init__(self, summary_server):
         super().__init__()
         self.summary_server = summary_server
@@ -1249,6 +1252,9 @@ class heatmap_service(database_service):
 
     def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
 
+        termDict, srcDict = self.sortDict(heatmap_data)
+        heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order  = self.addSortToData(heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order, termDict, srcDict)
+        
         matrix, row_term_relation = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         limit = 1000
         if len(matrix) > limit:
@@ -1495,7 +1501,7 @@ class heatmap_service(database_service):
         Input: heatmap_data (the same heatmap_data that goes into the function "output"). It's a dictionary with a dictionary as values. 
         Output: two dictionaries. termOutput would look something like this:
             {sort_method0: {term_id0: 0, term_id1: 2, term_id2: 1}, 
-            sort_method1: {term_id0: 1, term_id1: 2, term_id2: 0}, 
+            sort_method1: {term_id0: 5, term_id1: 2, term_id2: 13}, 
             sort_method2: term_id0: 2, term_id1: 1, term_id2: 0}}
             with the numbers representing either each term's rough position when sorted through or a calculated value unique to the sort method. The positions are zero-indexed. 
             sourceOutput follows the same format, but with sources instead of terms
@@ -1503,30 +1509,39 @@ class heatmap_service(database_service):
         termOutput = defaultdict(dict)
         sourceOutput = defaultdict(dict)
         term_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data}
-        term_id_name_dict.pop(TOTAL_TERM_ID)
         src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
 
         # All possible sort methods: alpha_id, alpha_term, frequency, identifier, total_count, name_length, jaccard, num_common_same_axis, norm_from_same_axis, number_synonyms, number_edges
         # Yet to be added: jaccard, identifier, num_common_same_axis, norm_from_same_axis
 
         # Sort: alpha_id. Sorting alphabetically by identifier
-        term_identifier_dict = {}
-        src_identifier_dict = {}
+        term_identifier_dict = defaultdict(list)
+        none_list = []
         
         for term in term_id_name_dict:
             if term == term_id_name_dict[term]:
                 identifier = TERM_SERVER.term_id_expansion(term)[1]
             else:
                 identifier = term
-            term_identifier_dict[identifier] = term
+            if identifier == None:
+                none_list.append(term)
+            else:
+                term_identifier_dict[identifier].append(term)
 
         term_identifier_list = sorted(term_identifier_dict, key=str.lower)    # Sort identifier_list by alphabetical order, regardless of upper/lowercase
         src_identifier_list = sorted(src_id_name_dict, key=str.lower)
 
-        for index, identifier in enumerate(term_identifier_list):
-            termOutput["alpha_id"][term_identifier_dict[identifier]] = index
+        buffer = 0
+        for term in none_list:
+            termOutput["sort_alpha_id"][term] = buffer
+            buffer += 1
+        index = 0
+        for identifier in term_identifier_list:
+            for term in term_identifier_dict[identifier]:
+                termOutput["sort_alpha_id"][term] = index + buffer
+                index += 1
         for index, source in enumerate(src_identifier_list):
-            sourceOutput["alpha_id"][source] = index
+            sourceOutput["sort_alpha_id"][source] = index
 
         # Sort: alpha_term. Sorting alphabetically by term name
         term_dict = {}    # This is the exact opposite of term_id_name_dict; keys and values are swapped. This makes it convenient later when you have a term name, and need the identifier used in heatmap_data
@@ -1541,29 +1556,29 @@ class heatmap_service(database_service):
         source_list = sorted(source_dict, key=str.lower)
 
         for index, term in enumerate(term_list):
-            termOutput["alpha_term"][term_dict[term]] = index
+            termOutput["sort_alpha_term"][term_dict[term]] = index
         for index, source in enumerate(source_list):
-            sourceOutput["alpha_term"][source_dict[source]] = index
+            sourceOutput["sort_alpha_term"][source_dict[source]] = index
 
         # Sort: frequency. Sorting by how many sources a term appears in, divided by the total number of sources
         # Sort: total_count. Sort by the total number of times a term shows up across all sources
         term_frequency_count_list = []
         src_frequency_count_list = []
         for term in term_id_name_dict:
-            frequency = len(v for v in heatmap_data[term].values() if v > 0)
-            count = sum(v for v in heatmap_data[term].values() if v > 0)
+            frequency = len([v for v in heatmap_data[term].values() if v > 0])
+            count = sum([v for v in heatmap_data[term].values() if v > 0])
             term_frequency_count_list.append((term, frequency, count))
         for source_id in src_id_name_dict:
-            frequency = len(v for v in heatmap_data.values() if source_id in v)
-            count = sum(v[source_id] for v in heatmap_data.values() if source_id in v)
+            frequency = len([v for v in heatmap_data.values() if source_id in v])
+            count = sum([v[source_id] for v in heatmap_data.values() if source_id in v])
             src_frequency_count_list.append((source_id, frequency, count))
 
         for tup in term_frequency_count_list:
-            termOutput["frequency"][tup[0]] = tup[1]
-            termOutput["total_count"][tup[0]] = tup[2]
+            termOutput["sort_frequency"][tup[0]] = tup[1]
+            termOutput["sort_total_count"][tup[0]] = tup[2]
         for tup in src_frequency_count_list:
-            sourceOutput["frequency"][tup[0]] = tup[1]
-            sourceOutput["total_count"][tup[0]] = tup[2]
+            sourceOutput["sort_frequency"][tup[0]] = tup[1]
+            sourceOutput["sort_total_count"][tup[0]] = tup[2]
 
         # Sort: name_length. Sort by length of term name, from smallest to greatest
         name_length_list = []
@@ -1574,9 +1589,9 @@ class heatmap_service(database_service):
             src_length_list.append((source, len(source)))
 
         for tup in name_length_list:
-            termOutput["name_length"][term_dict[tup[0]]] = tup[1]
+            termOutput["sort_name_length"][term_dict[tup[0]]] = tup[1]
         for tup in src_length_list:
-            sourceOutput["name_length"][src_dict[tup[0]]] = tup[1]
+            sourceOutput["sort_name_length"][source_dict[tup[0]]] = tup[1]
 
         # Sort: number_synonyms. Sort by number of synonyms each term has
         # Sort: number_edges. Sort by number of edges each term has in the graph
@@ -1584,19 +1599,40 @@ class heatmap_service(database_service):
         term_edge_syn_list = []
         for term in term_id_name_dict:
             putative_term, curie, label, syns = self.term_server.term_id_expansion(term)
-                if curie:
-                    curie = curie.replace('#', '%23')
-                    result = graph.getNeighbors(curie, depth=1, direction='BOTH')
-                    edges = result['edges']
-                    term_edge_syn_list.append((term, len(edges), len(syns)))
-                else:
-                    term_edge_syn_list.append((term, 0, len(syns)))
+            if curie:
+                curie = curie.replace('#', '%23')
+                result = graph.getNeighbors(curie, depth=1, direction='BOTH')
+                edges = result['edges']
+                term_edge_syn_list.append((term, len(edges), len(syns)))
+            else:
+                term_edge_syn_list.append((term, 0, len(syns)))
 
         for tup in term_edge_syn_list:
-            termOutput["number_edges"][tup[0]] = tup[1]
-            termOutput["number_synonyms"][tup[0]] = tup[2]
+            termOutput["sort_number_edges"][tup[0]] = tup[1]
+            termOutput["sort_number_synonyms"][tup[0]] = tup[2]
 
         return termOutput, sourceOutput
+
+    def addSortToData(self, heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order, termDict, srcDict):
+        """
+        This function adds srcDict information to heatmap_data's outer dictionary, 
+        and termDict information to heatmap_data's inner dictionary. 
+        Also adjusts term_id_order and src_id_order
+        Returns new heatmap_data, term_id_order, and src_id_order
+        """
+        for method in self.termSortMethods:
+            for term in heatmap_data:
+                heatmap_data[term][method] = termDict[method][term]
+            src_id_order += method,
+            src_name_order += method,
+
+        for method in self.srcSortMethods:
+            heatmap_data[method] = srcDict[method]
+            term_id_order += method,
+            term_name_order += method,
+            
+        return heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order
+        
 
     def __repr__(self):
         a = str(self.resources).replace('),','),\n')+'\n'
