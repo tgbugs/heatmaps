@@ -24,11 +24,11 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
-from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
-from .scigraph_client import Graph, Vocabulary
-from hierarchies import creatTree, in_tree, get_node
 
-#initiate scigraph services
+from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png
+from pyontutils.scigraph_client import Graph, Vocabulary
+
+# initilaize scigraph services
 graph = Graph()
 vocab = Vocabulary()
 
@@ -816,9 +816,11 @@ class heatmap_service(database_service):
     port = 5432
     hstore = True
     TERM_MIN = 5
-    supported_filetypes = None, 'csv', 'json', 'png'  # need for output
+    supported_filetypes = None, 'csv', 'tsv', 'html', 'json', 'png'  # need for output
     mimetypes = {None:'text/plain',
                  'csv':'text/csv',
+                 'tsv':'text/tsv',
+                 'html':'text/html',
                  'json':'application/json',
                  'png':'image/png'}
 
@@ -837,8 +839,10 @@ class heatmap_service(database_service):
         self.check_counts()
         self.output_map = {
             None:self.output_json,
-            'json':self.output_json,
             'csv':self.output_csv,
+            'tsv':self.output_tsv,
+            'html':self.output_html,
+            'json':self.output_json,
             'png':self.output_png,
                      }
 
@@ -1172,6 +1176,72 @@ class heatmap_service(database_service):
                 csv_string += line
 
         return csv_string, self.mimetypes['csv']
+
+    def output_tsv(self, heatmap_data, term_name_order, src_name_order, term_id_order,
+                   src_id_order, *args, sep=",", export_ids=True, **kwargs):
+        """ tsv file output for jheatmaps """
+        # TODO include the metrics rows/cols (frequecy, jarccard, etc) in the TSV for more sorting options
+        max_count_len = 0  # because someone doesn't know how to write a natural sort
+        for term in term_id_order:
+            count = str(max([v for v in heatmap_data[term].values()]))
+            if len(count) > max_count_len:
+                max_count_len = len(count)
+        single_pad = '0' * (max_count_len - 1)
+
+        term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
+        src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
+        term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
+        src_id_order = ['"%s"' % n if sep in n else n for n in src_id_order]  # probably dont need this here
+
+        tab = '\t'
+        header = '\t'.join(('source', 'term', 'count', 'link'))
+        lines = header
+        for term_name, term_id in zip(term_names, term_id_order):
+            inner = heatmap_data[term_id.strip('"')]
+            for src_name, src_id in zip(src_names, src_id_order):
+                if src_id in inner:
+                    count = str(inner[src_id])
+                    count = '0' * (max_count_len - len(count)) + count
+                else:
+                    count = single_pad + '-'  # null works nicely here
+                if src_id == 'nlx_82958':
+                    if count == '0':
+                        count = single_pad + '-'  # literature is missed in check above
+                    link = '<a href="http://neuinfo.org/literature/search?q='+term_id+'">'+count+'</a>'
+                else:
+                    link = '<a href="http://neuinfo.org/data/source/'+src_id+'/search?q='+term_id+'">'+count+'</a>'
+                proto_line = '\t'.join((src_name, term_name, count, link))
+                lines += '\n' + proto_line
+
+        return lines, 'text/plain'
+
+    def output_html(self, heatmap_data, term_name_order, src_name_order, term_id_order,
+                   src_id_order, *args, sep=",", export_ids=True, **kwargs):
+        term_name_order = list(term_name_order)
+        term_id_order = list(term_id_order)
+        
+        html_string = '<table border=1 style="width:100%">'
+        html_string += '<th><td>' + '</td><td>'.join(src_name_order) + '</td></th>'
+        for term_id in term_id_order:
+            term_name = term_id
+            if term_id == 'federation_totals':
+                term_name = '*'
+            html_string += '<tr>'
+            html_string += '<td>' + term_name + '</td>'
+            for src_id in src_id_order:
+                count = heatmap_data[term_id][src_id] if src_id in heatmap_data[term_id] else 0
+                count = str(count)
+                html_string += '<td>'
+                datlit = 'data'
+                if src_id == 'nlx_82958':
+                    html_string += '<a href="http://neuinfo.org/literature/search?q='+term_id+'">'+count+'</a>'
+                else:
+                    html_string += '<a href="http://neuinfo.org/data/source/'+src_id+'/search?q='+term_id+'">'+count+'</a>'
+                html_string += '</td>'
+            html_string += '</tr>'
+        html_string += '</table>'
+    
+        return html_string, self.mimetypes['html']
 
     def output_json(self, heatmap_data, *args, **kwargs):
         """ return a json object with the raw data and the src_id and term_id mappings """

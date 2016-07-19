@@ -13,7 +13,7 @@ Python for acquiring data to make heatmaps and actually making them.
 
 ## Building the whl file
 0. From this folder run `python3 setup.py bdist_wheel`
-1. From this folder run `pip --install --user dist/heatmaps*.whl` or use the exact name of the whl file.
+1. From this folder run `pip install --user --upgrade --no-deps dist/heatmaps*.whl` or use the exact name of the whl file.
 
 ## Running the service
 0. Once you have installed the whl file run hmweb to run the service.

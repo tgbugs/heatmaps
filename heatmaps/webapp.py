@@ -14,7 +14,8 @@
 
 import gzip
 from os import environ
-from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort
+from os.path import expanduser
+from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
 if environ.get('HEATMAP_PROD',None):
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
@@ -22,6 +23,15 @@ else:
     from IPython import embed  #FIXME
 
 from .services import heatmap_service, summary_service
+
+###
+#   Static resources to load once
+###
+
+with open(expanduser('~/git/jheatmap/site/js/jheatmap-1.0.0-min.js'),'rt') as f:
+    jheatmap_min = f.read()
+with open(expanduser('~/git/jheatmap/site/css/jheatmap-1.0.0-min.css'),'rt') as f:
+    css_min = f.read()
 
 ###
 #   Templates (FIXME extract)
@@ -183,9 +193,9 @@ def do_terms(terms, filename=None):
 
     base_url = 'http://' + request.host + ext_path
     job_url = base_url + '/terms/jobs/' + str(job_id)
-    output = ('Your list of terms has been submitted, your job is currently'
-              'processing and you will be notified when it completes.'
-              'Your job_id is {JOBID}. You when your job is done the url below will'
+    output = ('Your list of terms has been submitted, your job is currently '
+              'processing and you will be notified when it completes. '
+              'Your job_id is {JOBID}. You when your job is done the url below will '
               'redirect to your heatmap.<br>'
               '<a href={JOBURL}>{JOBURL}</a>').format(JOBID=job_id, JOBURL=job_url)
 
@@ -198,9 +208,14 @@ def do_terms(terms, filename=None):
     output = """
             <!doctype html>
             <title>Submit</title>
-            When your job is finished your heatmap can be downloaded as a png, a csv or as a json file at:
+            When your job is finished your heatmap can be downloaded as
+            a png, a csv, a tsv, an html table, or as a json file at:
             <br><br>
             <a href={url}.csv>{url}.csv</a>
+            <br>
+            <a href={url}.tsv>{url}.tsv</a>
+            <br>
+            <a href={url}.html>{url}.html</a>
             <br>
             <a href={url}.json>{url}.json</a>
             <br>
@@ -213,7 +228,6 @@ def do_terms(terms, filename=None):
             as long as you know your heatmap id which is {id}.
             """.format(url=base_url + '/prov/' + str(hp_id), id=hp_id, exp_url=base_url + '/explore/' + str(hp_id))
     return output
-
 
 def data_from_id(hm_id, filetype, collTerms=None, collSources=None,
                  levels=0, sortTerms=None, sortSources=None,
@@ -232,6 +246,7 @@ def data_from_id(hm_id, filetype, collTerms=None, collSources=None,
         response = make_response(data)
         response.headers['Content-Disposition'] = '%sfilename = %s' % (attachment, filename)
         response.mimetype = mimetype
+        #response.mimetype = 'text/plain'
         return response
     else:
         return abort(404)
@@ -255,6 +270,18 @@ terms_form = Form("NIF heatmaps from terms",
 ###
 #   Routes and implementations
 ###
+
+@hmapp.route(ext_path + "/static/jh.js", methods = ['GET'])
+def hm_jhjs():
+    response = make_response(jheatmap_min)
+    response.mimetype = 'text/javascript'
+    return response
+
+@hmapp.route(ext_path + "/static/jh.css", methods = ['GET'])
+def hm_jhcss():
+    response = make_response(css_min)
+    response.mimetype = 'text/css'
+    return response
 
 @hmapp.route(ext_path + "/explore/submit/<hm_id>", methods = ['POST'])
 def hm_viz(hm_id):
@@ -495,9 +522,51 @@ def hm_explore(hm_id):
     out.headers['Content-Encoding'] = 'gzip'
     return out
 
+@hmapp.route(ext_path + "/interactive/<hm_id>", methods = ['GET'])
+def hm_interactive(hm_id):
+    html = """<!doctype html>
+    <head>
+        <link rel="stylesheet" href="{css_min}">
+        <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+        <script type="text/javascript" src="{jheatmap_min}"></script>
+        <script>{heatmap_js}</script>
+    </head>
+    <body>
+        <div id="heatmap"></div>
+    </body>"""
+    heatmap_js = """
+    $(document).ready(function () {
+    $('#heatmap').heatmap(
+        {
+            data: {
+                values: new jheatmap.readers.TableHeatmapReader({ url: "../prov/%s.tsv" })
+            },
+ 
+            init: function (heatmap) {
+ 
+                heatmap.cols.zoom = 12;
+                //heatmap.cols.labelSize = 100;
+                heatmap.rows.zoom = 12;
+                //heatmap.rows.labelSize = 100;
 
-#@hmapp.route(hmext + "terms", methods = ['GET','POST'])
-@hmapp.route(ext_path + "/terms", methods = ['GET'])
+                // Decorators
+                heatmap.cells.decorators["count"] = new jheatmap.decorators.Heat({
+                                minValue: 0.0,
+                                midValue: 999,
+                                maxValue: 99999,
+                                minColor: [85, 0, 136],
+                                nullColor: [255,128,128],
+                                maxColor: [255, 204, 0],
+                                midColor: [240,240,240]
+                });
+            }
+        });
+    });\n""" % hm_id
+    jhjs = '../static/jh.js'
+    jhcss = '../static/jh.css'
+    return html.format(css_min=jhcss, jheatmap_min=jhjs, heatmap_js=heatmap_js)
+
+@hmapp.route(ext_path + "/terms", methods = ['GET']) #@hmapp.route(hmext + "terms", methods = ['GET','POST'])
 def hm_terms():
     #if request.method == 'POST':
         #return terms_form.data_received()
@@ -597,7 +666,7 @@ def docs():
     <h1>NIF heatmaps documentation</h1>
     To view an existing heatmap append the heatmapid to the following url: <br>
     <a href={prov_url}>{prov_url}</a><br>
-    Currently supported filetypes are csv, json, and png. <br>
+    Currently supported filetypes are csv, tsv, html, json, and png. <br>
     Example: <a href={prov_url}0.png>{prov_url}0.png</a> (note that this heatmap doesn't actually exist) <br>
     <br>
     To explore an existing heatmap append the heatmapid to the following url: <br>
