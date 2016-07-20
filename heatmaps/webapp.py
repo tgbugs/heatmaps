@@ -14,8 +14,8 @@
 
 import gzip
 from os import environ
-from os.path import expanduser
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
+import requests
 
 if environ.get('HEATMAP_PROD',None):
     embed = lambda args: print("THIS IS PRODUCTION AND PRODUCTION DOESNT LIKE IPYTHON ;_;")
@@ -28,10 +28,8 @@ from .services import heatmap_service, summary_service
 #   Static resources to load once
 ###
 
-with open(expanduser('~/git/jheatmap/site/js/jheatmap-1.0.0-min.js'),'rt') as f:
-    jheatmap_min = f.read()
-with open(expanduser('~/git/jheatmap/site/css/jheatmap-1.0.0-min.css'),'rt') as f:
-    css_min = f.read()
+jheatmap_min = requests.get('https://raw.githubusercontent.com/tgbugs/heatmaps/master/resources/jheatmap-1.0.0-min.js').text
+css_min = requests.get('https://raw.githubusercontent.com/tgbugs/heatmaps/master/resources/jheatmap-1.0.0-min.css').text
 
 ###
 #   Templates (FIXME extract)
