@@ -18,7 +18,7 @@ class prodUpdate(database_service):
             ins_args = (term, str_cast(heatmap_data[term]))
             ti_result = self.cursor_exec(sql_ins_term, ins_args)
             th_id = ti_result[0][0]
-        th_ids.append(th_id)
+            th_ids.append(th_id)
 
         sql_hp = "INSERT INTO heatmap_prov (filename, datetime) VALUES (%s,%s) RETURNING id, datetime"
         args = (filename, timestamp)
