@@ -917,13 +917,14 @@ class heatmap_service(database_service):
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)[0]
 
     @sanitize_input
-    def get_prov_from_id(self, hm_id):
+    def get_prov_from_id(self, hm_id, iso=True):
         sql = """SELECT datetime, filename FROM heatmap_prov WHERE id=%s;"""
         args = (hm_id,)
         tuples = self.cursor_exec(sql, args)
         if tuples:
             timestamp, filename = tuples[0]
-            timestamp = timestamp.isoformat()
+            if iso:
+                timestamp = timestamp.isoformat()
             return timestamp, filename if filename != None else ''
         else:
             return None, None
