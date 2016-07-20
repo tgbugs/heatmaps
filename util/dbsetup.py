@@ -13,13 +13,13 @@ class conncur:
         self.conn.close()
 
 
-def setup_db(create=False):
+def setup_db(create=False, dbname='heatmap_test'):
     """ execute blocks of sql delimited by --words-- in the setup file
         first 4 blocks do user and database setup
         the following 3 blocks do schema and table creation and alters
     """
     with open('heatmap_db_setup.sql', 'rt') as f:
-        lines = [' '+l.rstrip('\n').strip(' ') for l in f.readlines()]
+        lines = [' '+l.rstrip('\n').strip(' ').replace('heatmap_test', dbname) for l in f.readlines()]
     text = ''.join(lines)
     sql_blocks = [l.strip(' ') for l in text.split('--')][::2][1:]  #user, alter user, drop, db, tables, alter
 
@@ -36,19 +36,19 @@ def setup_db(create=False):
                     cur.execute(sql)
                     conn.commit()
 
-            with conncur(dbname='heatmap_test',user='postgres', host='127.0.0.1', port=5432) as (conn, cur):
+            with conncur(dbname=dbname,user='postgres', host='127.0.0.1', port=5432) as (conn, cur):
                 sql = sql_blocks[4]
                 cur.execute(sql)
                 conn.commit()
 
-    with conncur(dbname='heatmap_test',user='heatmapadmin', host='127.0.0.1', port=5432) as (conn, cur):
+    with conncur(dbname=dbname,user='heatmapadmin', host='127.0.0.1', port=5432) as (conn, cur):
         for sql in sql_blocks[5:8]:
             print(sql)
             cur.execute(sql)
             conn.commit()
 
 def main():
-    setup_db()
+    setup_db(True, 'heatmap')
 
 if __name__ == '__main__':
     main()
