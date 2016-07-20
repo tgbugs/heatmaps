@@ -42,6 +42,7 @@ prod_hmserv = prodUpdate()
 def main():
     prov_pairs = [('orpheus_id','prod_id')]
     for orpheus_id in range(0,91):
+        print(prod_id)  # in case something bad happens we know how far
         heatmap_data = orpheus_hmserv.get_heatmap_data_from_id(orpheus_id)
         if not heatmap_data:
             print('WARNING: heatmap with ID ', orpheus_id, 'not found! Skipping.')
