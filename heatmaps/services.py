@@ -825,9 +825,13 @@ class heatmap_service(database_service):
     collTerms = None,
     collSources = None, 'collapse views to sources', 'collapse names to sources'
 
-    from .visualization import applyCollapse, dict_to_matrix, sCollapseToSrcId, sCollapseToSrcName, make_png
-
     def __init__(self, summary_server):
+        from .visualization import applyCollapse, dict_to_matrix, sCollapseToSrcId, sCollapseToSrcName, make_png
+        self.applyCollapse = applyCollapse
+        self.dict_to_matrix = dict_to_matrix
+        self.sCollapseToSrcId = sCollapseToSrcId
+        self.sCOllapseToSrcName = sCollapseToSrcName
+        self.make_png = make_png
         super().__init__()
         self.summary_server = summary_server
         self.term_server = TERM_SERVER
@@ -909,7 +913,7 @@ class heatmap_service(database_service):
             term_id_order = sorted(hm_data) 
         if not src_id_order:
             src_id_order = sorted(hm_data[TOTAL_TERM_ID])
-        heatmap = heatmap_service.dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)
+        heatmap = self.dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)
 
     @sanitize_input
     def get_prov_from_id(self, hm_id, iso=True):
@@ -1150,7 +1154,7 @@ class heatmap_service(database_service):
         """ consturct a csv file on the fly for download response """
         #this needs access id->name mappings
         #pretty sure I already have this written?
-        matrix = heatmap_service.dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
+        matrix = self.dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         term_names = ['"%s"' % n if sep in n else n for n in term_name_order]
         src_names = ['"%s"' % n if sep in n else n for n in src_name_order]
         term_id_order = ['"%s"' % n if sep in n else n for n in term_id_order]  # deal with commas in names
@@ -1252,7 +1256,7 @@ class heatmap_service(database_service):
         term_id_order = list(term_id_order)
         # remove the total term name from the name order list
         assert term_name_order.pop(term_id_order.index(TOTAL_TERM_ID)) == TOTAL_TERM_ID_NAME, "WHOOPS"
-        matrix = heatmap_service.dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
+        matrix = self.dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID, exclude_tt=True)
         limit = 1000
         if len(matrix) > limit:
             #return "There are too many terms to render as a png. Limit is %s." % limit, self.mimetypes[None]
@@ -1268,11 +1272,11 @@ class heatmap_service(database_service):
         row_names = term_name_order
         col_names = src_name_order
         destdir = '/tmp/'
-        future = self.ppe.submit(heatmap_service.make_png, matrix, row_names, col_names, title, destdir, poster=False, async=True)
+        future = self.ppe.submit(self.make_png, matrix, row_names, col_names, title, destdir, poster=False, async=True)
         future.result()
         with open(destdir + '%s.png'%title, 'rb') as f:
             png = f.read()
-        #png = heatmap_service.make_png(matrix, row_names, col_names, title)
+        #png = self.make_png(matrix, row_names, col_names, title)
         return png, self.mimetypes['png']
 
     def input_validation(self, heatmap_data, *args, **kwargs):
@@ -1403,10 +1407,10 @@ class heatmap_service(database_service):
             src_coll_function = lambda heatmap_data_ttid, src_id_name_dict: heatmap_data_ttid, src_id_name_dict
             src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
         elif collSources == 'collapse views to sources':
-            src_coll_function = heatmap_service.sCollapseToSrcId
+            src_coll_function = self.sCollapseToSrcId
             src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         elif collSources == 'collapse names to sources':
-            src_coll_function = heatmap_service.sCollapseToSrcName
+            src_coll_function = self.sCollapseToSrcName
             src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         else:
             src_coll_function = None
@@ -1419,10 +1423,10 @@ class heatmap_service(database_service):
 
         # apply the collapse dicts to the data, need to do before sorting for some sort options
         if term_id_coll_dict:
-            heatmap_data = heatmap_service.applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
+            heatmap_data = self.applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
 
         if src_id_coll_dict:
-            heatmap_data = heatmap_service.applyCollapse(heatmap_data, src_id_coll_dict)
+            heatmap_data = self.applyCollapse(heatmap_data, src_id_coll_dict)
 
         #FIXME PROBLEMS KIDS
         #idSortTerms, idSortSources = idSortSources, idSortTerms
