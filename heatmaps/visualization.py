@@ -95,6 +95,7 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, levels):
     Inputs: 
     -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}, "term2": {src2-1, src2-0}, "term3": {src4-1, src4-2}}
     -id_name_dict: a dictionary with terms (Strings) as keys and term name (Strings) as values. Example: {"term1": "hbox", "term2": "mang0", "term3": "Abate"}
+    -treeOutput: the output from enrichment. It's the same output format as creatTree
     -level: the number of levels to descend in the ontology before beginning collapse. Integer
 
     Outputs:
@@ -108,6 +109,9 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, levels):
     id_tree = treeOutput[1][0]
     
     def findTreeLevel(listOfNamed, listOfID, level):
+        """
+        Returns a list of trees at the correct depth
+        """
         if level == 0:
             return listOfNamed, listOfID
 
@@ -127,7 +131,11 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, levels):
                     tinyTree = {rooot: allUnderRoot[rooot]}
                     newListOfID.append(tinyTree)
         return findTreeLevel(newListOfNamed, newListOfID, level - 1)
+
     def filterTrees():
+        """
+        Get the trees we actually want and are interested in. Some trees don't have the terms we're looking for, so those will not be considered
+        """
         filteredTrees = []
         term_to_tree = {}
         treeNumber = 0
@@ -154,6 +162,7 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, levels):
     named_tree, id_tree = findTreeLevel([named_tree], [id_tree], levels)
     filteredTrees, term_to_tree = filterTrees()
     
+    # Fill in key_collections_dict and new_id_name_dict
     for treeNumber, tree in enumerate(filteredTrees):
         for key in tree:
             root = key

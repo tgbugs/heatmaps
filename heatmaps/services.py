@@ -1654,7 +1654,6 @@ class heatmap_service(database_service):
         # Make trees for each term. Make a masterSet from the terms to find commonParent. Store nodes and edges
         listOfSetOfNodes = []
         listOfNodes = []
-        listOfEdges = []
         listOfObjToSub = []
         listOfIdentifiers = []
         for term in id_name_dict:
@@ -1669,13 +1668,12 @@ class heatmap_service(database_service):
                 setOfNodes = set(nodes)
                 listOfSetOfNodes.append(setOfNodes)
                 listOfNodes.append(nodes)
-                listOfEdges.append(extra[3])
                 listOfObjToSub.append(extra[5])
                 listOfIdentifiers.append(identifier)
             except:
                 pass
 
-        id_name_dict_expanded = {}
+        id_name_dict_expanded = {}    # Keep track of all identifiers and their true names
         for dicto in listOfNodes:
             for iden in dicto:
                 id_name_dict_expanded[iden] = dicto[iden]
@@ -1686,11 +1684,11 @@ class heatmap_service(database_service):
             masterSet = masterSet & setOfNodes
 
         masterSet.remove('CYCLE DETECTED DERPS')
-        searchCP = set()
+        searchCP = set()    # searchCP will be used to find the commonParent. 
         for item in masterSet:
             searchCP.add(item)
         
-
+        # Keeping track of all the edges via objects and subjects (object --> subject)
         edges0 = []
         edges1 = []
         for pair in listOfObjToSub:
@@ -1700,6 +1698,7 @@ class heatmap_service(database_service):
                     edges0.append(obj)
                     edges1.append(item)
         
+        # Prunning the tree. Only the search terms should be at the bottom of the tree anyway; the rest is extra that we don't need
         fullPrun = False
         while not fullPrun:
             fullPrun = True
@@ -1713,7 +1712,7 @@ class heatmap_service(database_service):
                 edges0.pop(index)
                 edges1.pop(index)
         
-                
+        # tempEdgeDict will help us in our search for the commonParent. It contains the information of edges0 and edges1 in dictionary format, making it easy to access
         tempEdgeDict = defaultdict(set)
         for i in range(len(edges0)):
             tempEdgeDict[edges0[i]].add(edges1[i])
@@ -1727,6 +1726,8 @@ class heatmap_service(database_service):
                 tree[node][sub]
                 fillTree(sub, tree[node])
 
+
+        # Find the commonParent. If searchCP is empty for some reason, the commonParent is owl#Thing by default
         try:
             searchCont = True
             commonParent = searchCP.pop()
@@ -1747,40 +1748,16 @@ class heatmap_service(database_service):
             masterSet.remove(commonParent)
         except KeyError:
             commonParent = "http://www.w3.org/2002/07/owl#Thing"
-
-        fullPrun = False
-        while not fullPrun:
-            fullPrun = True
-            toRemove = []
-            for sub in edges1:
-                if sub not in edges0 and sub not in listOfIdentifiers:
-                    toRemove.append(sub)
-                    fullPrun = False
-            for sub in toRemove:
-                index = edges1.index(sub)
-                edges0.pop(index)
-                edges1.pop(index)
             
-        # Find rank (actually called "degree")  for each node
+        # Find rank (actually called "degree")  for each node. This dict also eliminates any nodes not directly related to commonParent (must be children)
         rankDict = {}
         def fillRankDict(identifier):
             rankDict[identifier] = 0
             for node in tempEdgeDict[identifier]:
                 fillRankDict(node)
                 rankDict[identifier] += rankDict[node] + 1
-
-        toRemove = []
-        for item in edges0:
-            if item not in rankDict.keys() and item not in toRemove:
-                toRemove.append(item)
-        for item in toRemove:
-            count = edges0.count(item)
-            while count != 0:
-                index = edges0.index(item)
-                edges0.pop(index)
-                edges1.pop(index)
-                count -= 1
         
+        # edges0 and edges1 have duplicate entries. To eliminate this problem, we'll use our old friend tempEdgeDict! And we'll also fill our rankDict
         edges0 = []
         edges1 = []
         for obj in tempEdgeDict.keys():
@@ -1789,6 +1766,7 @@ class heatmap_service(database_service):
                 edges1.append(sub)
         fillRankDict(commonParent)
 
+        # Take out edges not included in rankDict
         toRemove = []
         for obj in edges0:
             if obj not in rankDict.keys():
@@ -1797,7 +1775,6 @@ class heatmap_service(database_service):
             index = edges0.index(obj)
             edges0.pop(index)
             edges1.pop(index)
-
         toRemove = []
         for obj in edges1:
             if obj not in rankDict.keys():
@@ -1807,14 +1784,18 @@ class heatmap_service(database_service):
             edges0.pop(index)
             edges1.pop(index)
             
+        # If there are two branches going upward from a node, we need to take care of that!
+        toRemove = []
         for sub in edges1:
             if edges1.count(sub) > 1 and sub not in toRemove and sub in rankDict.keys():
                 toRemove.append(sub)
-
         toRemove = sorted(toRemove, key=lambda x: rankDict[x])
         toRemove.reverse()
         
         def eraseUpwardEdges(sub):
+            """
+            Erase extra edges in the case of multiple branches from a single node going toward commonParent's direction
+            """
             def travelUp(sub, index):
                 """
                 Return a set of parents for a certain branch upward
@@ -1840,11 +1821,11 @@ class heatmap_service(database_service):
                 if subj == sub:
                     setOfParents = travelUp(sub, i)
                     travelPath.append(setOfParents)
-                    
+              
+            # Find the common node that all the branches share      
             masterParentSet = travelPath[0]
             for parentSet in travelPath:
                 masterParentSet = masterParentSet & parentSet
-
             try:
                 miniCommonParent = masterParentSet.pop()
             except:
@@ -1859,7 +1840,8 @@ class heatmap_service(database_service):
                         done = False
                 if done:
                     foundCommonParent = True
-                
+            
+            # Look at the children of the common node. The one with the highest rank is part of the branch we want to keep. The other ones will be taken out
             miniChildren = tempEdgeDict[miniCommonParent]
             miniChildrenRank = []
             for child in miniChildren:
@@ -1870,6 +1852,7 @@ class heatmap_service(database_service):
             miniChildrenRank = sorted(miniChildrenRank, key=lambda x: rankDict[x])
             miniChildrenRank.pop()    # The child with the largest rank was popped. The ones that need to be removed remain. 
 
+            # Taking out the unnecessary branches
             for child in miniChildrenRank:
                 for path in travelPath:
                     if child in path:
@@ -1893,12 +1876,11 @@ class heatmap_service(database_service):
                     if obj == parentalNode and edges1[i] == sub:
                         edges0.pop(i)
                         edges1.pop(i)
-        erasing = False
+        
         for sub in toRemove:
             eraseUpwardEdges(sub)
-            erasing = True
-
         
+        # With excess edges removed, time to prune again!
         fullPrun = False
         while not fullPrun:
             fullPrun = True
@@ -1912,12 +1894,13 @@ class heatmap_service(database_service):
                 edges0.pop(index)
                 edges1.pop(index)
         
+        # Create newEdgeDict. It includes the new changes from taking out excess branches
         newEdgeDict = defaultdict(set)
         for i in range(len(edges0)):
             newEdgeDict[edges0[i]].add(edges1[i])
 
-        resultJson = defaultdict(list)
-    
+        # Make the json file we need to feed into creatTree
+        resultJson = defaultdict(list)    
         for obj in newEdgeDict.keys():
             for sub in newEdgeDict[obj]:
                 miniDict = {}    # "sub" is "pred" of "obj"
@@ -1926,7 +1909,6 @@ class heatmap_service(database_service):
                 miniDict['obj'] = sub
                 miniDict['pred'] = relationship
                 resultJson['edges'].append(miniDict)
-
         setOfObj = set(edges0)
         setOfSub = set(edges1)
         setOfAllNodes = setOfObj | setOfSub
@@ -1937,7 +1919,6 @@ class heatmap_service(database_service):
                 name = ""
             miniDict = {'id': identifier, 'lbl': name}
             resultJson['nodes'].append(miniDict)
-
         resultJson = dict(resultJson)
         resultJson = json.dumps(resultJson)
         resultJson = json.loads(resultJson)
