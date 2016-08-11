@@ -21,7 +21,7 @@ def main():
     args = docopt(__doc__, version='heatmaps .0001')
     if args ['--run']:
         from heatmaps import webapp
-        webapp.main(port=4989)
+        webapp.main(port=4999)
     elif args['--createdb']:
         setup_db(True)
     elif args['--setupdb']:
