@@ -24,10 +24,12 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
+<<<<<<< HEAD
 
 from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
 from pyontutils.scigraph_client import Graph, Vocabulary
 from pyontutils.hierarchies import creatTree, in_tree
+from .scigraph_client import Graph, Vocabulary
 
 # initilaize scigraph services
 graph = Graph()
@@ -833,6 +835,12 @@ class heatmap_service(database_service):
     srcSortMethods = ('sort_alpha_id', 'sort_alpha_term', 'sort_frequency', 'sort_total_count', 'sort_name_length')
 
     def __init__(self, summary_server):
+        from .visualization import applyCollapse, dict_to_matrix, sCollapseToSrcId, sCollapseToSrcName, make_png
+        self.applyCollapse = applyCollapse
+        self.dict_to_matrix = dict_to_matrix
+        self.sCollapseToSrcId = sCollapseToSrcId
+        self.sCOllapseToSrcName = sCollapseToSrcName
+        self.make_png = make_png
         super().__init__()
         self.summary_server = summary_server
         self.term_server = TERM_SERVER
@@ -917,13 +925,14 @@ class heatmap_service(database_service):
         heatmap = dict_to_matrix(hm_data, term_id_order, src_id_order, TOTAL_TERM_ID)[0]
 
     @sanitize_input
-    def get_prov_from_id(self, hm_id):
+    def get_prov_from_id(self, hm_id, iso=True):
         sql = """SELECT datetime, filename FROM heatmap_prov WHERE id=%s;"""
         args = (hm_id,)
         tuples = self.cursor_exec(sql, args)
         if tuples:
             timestamp, filename = tuples[0]
-            timestamp = timestamp.isoformat()
+            if iso:
+                timestamp = timestamp.isoformat()
             return timestamp, filename if filename != None else ''
         else:
             return None, None
@@ -1252,7 +1261,6 @@ class heatmap_service(database_service):
         return json.dumps(heatmap_data), self.mimetypes['json']
 
     def output_png(self, heatmap_data, term_name_order, src_name_order, term_id_order, src_id_order, *args, title='heatmap', **kwargs):
-
         matrix, row_term_relation = dict_to_matrix(heatmap_data, term_id_order, src_id_order, TOTAL_TERM_ID)
         limit = 1000
         if len(matrix) > limit:
@@ -1283,11 +1291,11 @@ class heatmap_service(database_service):
         #row_names = term_name_order
         col_names = src_name_order
         destdir = '/tmp/'
-        future = self.ppe.submit(make_png, matrix, row_names, col_names, title, destdir, poster=False, async=True)
+        future = self.ppe.submit(self.make_png, matrix, row_names, col_names, title, destdir, poster=False, async=True)
         future.result()
         with open(destdir + '%s.png'%title, 'rb') as f:
             png = f.read()
-        #png = make_png(matrix, row_names, col_names, title)
+        #png = self.make_png(matrix, row_names, col_names, title)
         return png, self.mimetypes['png']
 
     def input_validation(self, heatmap_data, *args, **kwargs):
@@ -1441,10 +1449,10 @@ class heatmap_service(database_service):
             src_coll_function = lambda heatmap_data_ttid, src_id_name_dict: heatmap_data_ttid, src_id_name_dict
             src_id_name_dict = {id_:self.get_name_from_id(id_) for id_ in heatmap_data[TOTAL_TERM_ID]}
         elif collSources == 'collapse views to sources':
-            src_coll_function = sCollapseToSrcId
+            src_coll_function = self.sCollapseToSrcId
             src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         elif collSources == 'collapse names to sources':
-            src_coll_function = sCollapseToSrcName
+            src_coll_function = self.sCollapseToSrcName
             src_id_name_dict = {id_:name_tup[0] for id_, name_tup in self.resources.items()}
         else:
             src_coll_function = None
@@ -1458,10 +1466,10 @@ class heatmap_service(database_service):
         heatmap_data = dict(heatmap_data_copy)
         # apply the collapse dicts to the data, need to do before sorting for some sort options
         if term_id_coll_dict:
-            heatmap_data = applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
+            heatmap_data = self.applyCollapse(heatmap_data, term_id_coll_dict, term_axis=True)
 
         if src_id_coll_dict:
-            heatmap_data = applyCollapse(heatmap_data, src_id_coll_dict)
+            heatmap_data = self.applyCollapse(heatmap_data, src_id_coll_dict)
 
         #FIXME PROBLEMS KIDS
         #idSortTerms, idSortSources = idSortSources, idSortTerms
