@@ -90,7 +90,7 @@ def sCollToLength(keys, id_name_dict):
         new_id_name_dict[parent_key].add(key)
     return dict(key_collections_dict), new_id_name_dict
 
-def sCollByTermParent(keys, id_name_dict, treeOutput, level):
+def sCollByTermParent(keys, id_name_dict, treeOutput, levels):
     """
     Inputs: 
     -keys: a dictionary with terms (Strings) as keys and a dictionary of <sources, values> as values. Example: {"term1": {src3-2: 5, src3-1: 2}, "term2": {src2-1, src2-0}, "term3": {src4-1, src4-2}}
@@ -104,47 +104,45 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
     key_collections_dict = defaultdict(set)
     new_id_name_dict = defaultdict(set)
 
-    tree, extra = treeOutput[0], treeOutput[1]
+    named_tree = treeOutput[0]
+    id_tree = treeOutput[1][0]
+    
+    def findTreeLevel(listOfNamed, listOfID, level):
+        if level == 0:
+            return listOfNamed, listOfID
 
-    def findTreeLevel(tree, extra, levelsRemaining):
-        if levelsRemaining == 0:
-            return [tree]
-        parentIdentifiers = extra[4]
-        for key in tree:
-            root = key
-        noRootTree = tree[root]
-        listOfTrees = []
-        for key in noRootTree:
-            if key not in parentIdentifiers:
-                listOfTrees.append(noRootTree[key])
-        return findTreeLevelHelper(listOfTrees, levelsRemaining - 1)
-    def findTreeLevelHelper(listOfTrees, levelsRemaining):
-        """
-        Get a list of trees that are at the requested level. 
-        """
-        if levelsRemaining == 0:
-            return listOfTrees
-        newListOfTrees = []
-        for tree in listOfTrees:
-            for key in tree:
-                root = key
-                noRootTree = tree[root]
-                for key in noRootTree:
-                    child = noRootTree[key]
-                    newListOfTrees.append(child)
-        return findTreeLevelHelper(newListOfTrees, levelsRemaining - 1)
-    def filterListOfTrees(listOfTrees):
-        """
-        Ensures all the trees have the terms we want in them. 
-        Input: listOfTrees
-        Output: filteredTrees, term_to_tree (dict) (term as keys, tree index in filteredTrees as values)
-        """
+        newListOfNamed = []
+        newListOfID = []
+        for tree in listOfNamed:
+            for root in tree.keys():
+                allUnderRoot = tree[root]
+                for rooot in allUnderRoot.keys():
+                    tinyTree = {rooot: allUnderRoot[rooot]}
+                    newListOfNamed.append(tinyTree)
+
+        for tree in listOfID:
+            for root in tree.keys():
+                allUnderRoot = tree[root]
+                for rooot in allUnderRoot.keys():
+                    tinyTree = {rooot: allUnderRoot[rooot]}
+                    newListOfID.append(tinyTree)
+        return findTreeLevel(newListOfNamed, newListOfID, level - 1)
+    def filterTrees():
         filteredTrees = []
         term_to_tree = {}
         treeNumber = 0
-        for tree in listOfTrees:
+        
+        def treeToUse():    # We can't use TERM_SERVER, so this is one way to get the right tree
+            for term in id_name_dict.keys():
+                if term == id_name_dict[term]:
+                    return named_tree
+                else:
+                    return id_tree
+                
+        correctTrees = treeToUse()
+        for tree in correctTrees:
             hasATerm = False
-            for term in id_name_dict:
+            for term in id_name_dict.keys():
                 if in_tree(term, tree):
                     hasATerm = True
                     term_to_tree[term] = treeNumber
@@ -152,27 +150,24 @@ def sCollByTermParent(keys, id_name_dict, treeOutput, level):
                 filteredTrees.append(tree)
                 treeNumber += 1
         return filteredTrees, term_to_tree
-
-    listOfTrees = findTreeLevel(tree, extra, level)
-    listOfTrees, term_to_tree = filterListOfTrees(listOfTrees)
-
-    for treeNumber, tree in enumerate(listOfTrees):
-        # get the root and save as variable "root"
+    
+    named_tree, id_tree = findTreeLevel([named_tree], [id_tree], levels)
+    filteredTrees, term_to_tree = filterTrees()
+    
+    for treeNumber, tree in enumerate(filteredTrees):
         for key in tree:
             root = key
-            restOfTree = tree[key]
             if root == None:
                 root = "Thing"
-        for term in term_to_tree.keys():
-            if term_to_tree[term] == treeNumber:
-                key_collections_dict[root].add(term)
-                new_id_name_dict[root].add(id_name_dict[term])
-
+            for term in term_to_tree.keys():
+                if term_to_tree[term] == treeNumber:
+                    key_collections_dict[root].add(term)
+                    new_id_name_dict[root].add(id_name_dict[term])
     for term in id_name_dict:
         if term not in term_to_tree:
             key_collections_dict["No identifiers"].add(term)
             new_id_name_dict["No identifiers"].add(id_name_dict[term])
-
+            
     return dict(key_collections_dict), dict(new_id_name_dict)
 
 def applyCollapse(heatmap_data, key_collections_dict, term_axis=False): 

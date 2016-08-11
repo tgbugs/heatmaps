@@ -25,8 +25,9 @@ else:
     from IPython import embed
 
 
-from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png
+from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
 from pyontutils.scigraph_client import Graph, Vocabulary
+from pyontutils.hierarchies import creatTree, in_tree
 
 # initilaize scigraph services
 graph = Graph()
@@ -826,7 +827,7 @@ class heatmap_service(database_service):
 
     collTerms = None, 'collapse terms by character number' , 'collapse terms by hierarchy'
     collSources = None, 'collapse views to sources', 'collapse names to sources'
-    levels = 0, 1, 2, 3, 4, 5
+    levels = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
 
     termSortMethods = ('sort_alpha_id', 'sort_alpha_term', 'sort_frequency', 'sort_total_count', 'sort_name_length', 'sort_number_synonyms', 'sort_number_edges')
     srcSortMethods = ('sort_alpha_id', 'sort_alpha_term', 'sort_frequency', 'sort_total_count', 'sort_name_length')
@@ -1421,7 +1422,7 @@ class heatmap_service(database_service):
         
         if term_coll_function:
             if term_coll_function == sCollByTermParent:
-                treeOutput = enrichment(term_id_name_dict)
+                treeOutput = self.enrichment(term_id_name_dict)
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict, treeOutput, int(levels))
             else: 
                 term_id_coll_dict, term_id_name_dict = term_coll_function(heatmap_data_copy, term_id_name_dict)
@@ -1633,6 +1634,318 @@ class heatmap_service(database_service):
             term_name_order += method,
             
         return heatmap_data, term_id_order, src_id_order, term_name_order, src_name_order
+
+    def enrichment(self, id_name_dict):
+        """
+        Takes in terms and outputs a tree with the common parent as the root
+        Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
+        Output: tree, extra (the same type of stuff that comes from creatTree)
+        """
+        Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
+
+        relationship = 'subClassOf'
+        direction = 'OUTGOING'
+        
+        try:
+            id_name_dict.pop(TOTAL_TERM_ID)
+        except KeyError:
+            pass
+    
+        # Make trees for each term. Make a masterSet from the terms to find commonParent. Store nodes and edges
+        listOfSetOfNodes = []
+        listOfNodes = []
+        listOfEdges = []
+        listOfObjToSub = []
+        listOfIdentifiers = []
+        for term in id_name_dict:
+            if term == id_name_dict[term]:
+                identifier = TERM_SERVER.term_id_expansion(term)[1]
+            else:
+                identifier = term
+            queryForTerm = Query(identifier, relationship, direction, 9)
+            try:
+                tree, extra = creatTree(*queryForTerm)
+                nodes = extra[2]
+                setOfNodes = set(nodes)
+                listOfSetOfNodes.append(setOfNodes)
+                listOfNodes.append(nodes)
+                listOfEdges.append(extra[3])
+                listOfObjToSub.append(extra[5])
+                listOfIdentifiers.append(identifier)
+            except:
+                pass
+
+        id_name_dict_expanded = {}
+        for dicto in listOfNodes:
+            for iden in dicto:
+                id_name_dict_expanded[iden] = dicto[iden]
+            
+        # Make masterSet, which has all the nodes the terms share in common in their trees
+        masterSet = listOfSetOfNodes[0]
+        for setOfNodes in listOfSetOfNodes:
+            masterSet = masterSet & setOfNodes
+
+        masterSet.remove('CYCLE DETECTED DERPS')
+        searchCP = set()
+        for item in masterSet:
+            searchCP.add(item)
+        
+
+        edges0 = []
+        edges1 = []
+        for pair in listOfObjToSub:
+            for obj in pair.keys():
+                sub = pair[obj]
+                for item in sub:
+                    edges0.append(obj)
+                    edges1.append(item)
+        
+        fullPrun = False
+        while not fullPrun:
+            fullPrun = True
+            toRemove = []
+            for sub in edges1:
+                if sub not in edges0 and sub not in listOfIdentifiers:
+                    toRemove.append(sub)
+                    fullPrun = False
+            for sub in toRemove:
+                index = edges1.index(sub)
+                edges0.pop(index)
+                edges1.pop(index)
+        
+                
+        tempEdgeDict = defaultdict(set)
+        for i in range(len(edges0)):
+            tempEdgeDict[edges0[i]].add(edges1[i])
+
+        def recDict():
+            return defaultdict(recDict)
+        def fillTree(node, tree):
+            if node not in tempEdgeDict.keys():
+                return
+            for sub in tempEdgeDict[node]:
+                tree[node][sub]
+                fillTree(sub, tree[node])
+
+        try:
+            searchCont = True
+            commonParent = searchCP.pop()
+            while searchCont:
+                matchFound = True
+                tempTree = recDict()
+                fillTree(commonParent, tempTree)
+                for item in searchCP:
+                    if in_tree(item, tempTree):
+                        itemInTree = True
+                        if itemInTree:
+                            commonParent = item
+                            searchCP.remove(item)
+                            matchFound = False
+                            break
+                if not matchFound:
+                    searchCont = False
+            masterSet.remove(commonParent)
+        except KeyError:
+            commonParent = "http://www.w3.org/2002/07/owl#Thing"
+
+        fullPrun = False
+        while not fullPrun:
+            fullPrun = True
+            toRemove = []
+            for sub in edges1:
+                if sub not in edges0 and sub not in listOfIdentifiers:
+                    toRemove.append(sub)
+                    fullPrun = False
+            for sub in toRemove:
+                index = edges1.index(sub)
+                edges0.pop(index)
+                edges1.pop(index)
+            
+        # Find rank (actually called "degree")  for each node
+        rankDict = {}
+        def fillRankDict(identifier):
+            rankDict[identifier] = 0
+            for node in tempEdgeDict[identifier]:
+                fillRankDict(node)
+                rankDict[identifier] += rankDict[node] + 1
+
+        toRemove = []
+        for item in edges0:
+            if item not in rankDict.keys() and item not in toRemove:
+                toRemove.append(item)
+        for item in toRemove:
+            count = edges0.count(item)
+            while count != 0:
+                index = edges0.index(item)
+                edges0.pop(index)
+                edges1.pop(index)
+                count -= 1
+        
+        edges0 = []
+        edges1 = []
+        for obj in tempEdgeDict.keys():
+            for sub in tempEdgeDict[obj]:
+                edges0.append(obj)
+                edges1.append(sub)
+        fillRankDict(commonParent)
+
+        toRemove = []
+        for obj in edges0:
+            if obj not in rankDict.keys():
+                toRemove.append(obj)
+        for obj in toRemove:
+            index = edges0.index(obj)
+            edges0.pop(index)
+            edges1.pop(index)
+
+        toRemove = []
+        for obj in edges1:
+            if obj not in rankDict.keys():
+                toRemove.append(obj)
+        for obj in toRemove:
+            index = edges1.index(obj)
+            edges0.pop(index)
+            edges1.pop(index)
+            
+        for sub in edges1:
+            if edges1.count(sub) > 1 and sub not in toRemove and sub in rankDict.keys():
+                toRemove.append(sub)
+
+        toRemove = sorted(toRemove, key=lambda x: rankDict[x])
+        toRemove.reverse()
+        
+        def eraseUpwardEdges(sub):
+            def travelUp(sub, index):
+                """
+                Return a set of parents for a certain branch upward
+                """
+                obj = edges0[index]
+                return travelUpHelper(obj)
+            def travelUpHelper(sub):
+                result = set()
+                result.add(sub)
+                if sub == commonParent or sub not in rankDict.keys():
+                    return result
+                for i, subj in enumerate(edges1):
+                    if subj == sub:
+                        obj = edges0[i]
+                        moreParents = travelUpHelper(obj)
+                        for item in moreParents:
+                            result.add(item)
+                return result           
+                
+            indexOfSet = 0
+            travelPath = []
+            for i, subj in enumerate(edges1):
+                if subj == sub:
+                    setOfParents = travelUp(sub, i)
+                    travelPath.append(setOfParents)
+                    
+            masterParentSet = travelPath[0]
+            for parentSet in travelPath:
+                masterParentSet = masterParentSet & parentSet
+
+            try:
+                miniCommonParent = masterParentSet.pop()
+            except:
+                embed()
+            foundCommonParent = False
+            while not foundCommonParent:
+                miniCommonChildren = tempEdgeDict[miniCommonParent]
+                for item in miniCommonChildren:
+                    done = True
+                    if item in masterParentSet:
+                        miniCommonParent = item
+                        done = False
+                if done:
+                    foundCommonParent = True
+                
+            miniChildren = tempEdgeDict[miniCommonParent]
+            miniChildrenRank = []
+            for child in miniChildren:
+                for path in travelPath:    # This ensures the child exists in one of the paths to sub
+                    if child in path:
+                        miniChildrenRank.append(child)
+                        break
+            miniChildrenRank = sorted(miniChildrenRank, key=lambda x: rankDict[x])
+            miniChildrenRank.pop()    # The child with the largest rank was popped. The ones that need to be removed remain. 
+
+            for child in miniChildrenRank:
+                for path in travelPath:
+                    if child in path:
+                        parentalNode = path.pop()
+                        trueParent = False
+                        while trueParent:
+                            children = tempEdgeDict[parentalNode]
+                            foundParent = True
+                            for item in children:
+                                if item in path:
+                                    parentalNode = item
+                                    foundParent = False
+                                    break
+                            if foundParent:
+                                trueParent = True
+                for i, obj in enumerate(edges0):
+                    try:
+                        obj == parentalNode
+                    except:
+                        embed()
+                    if obj == parentalNode and edges1[i] == sub:
+                        edges0.pop(i)
+                        edges1.pop(i)
+        erasing = False
+        for sub in toRemove:
+            eraseUpwardEdges(sub)
+            erasing = True
+
+        
+        fullPrun = False
+        while not fullPrun:
+            fullPrun = True
+            toRemove = []
+            for sub in edges1:
+                if sub not in edges0 and sub not in listOfIdentifiers:
+                    toRemove.append(sub)
+                    fullPrun = False
+            for sub in toRemove:
+                index = edges1.index(sub)
+                edges0.pop(index)
+                edges1.pop(index)
+        
+        newEdgeDict = defaultdict(set)
+        for i in range(len(edges0)):
+            newEdgeDict[edges0[i]].add(edges1[i])
+
+        resultJson = defaultdict(list)
+    
+        for obj in newEdgeDict.keys():
+            for sub in newEdgeDict[obj]:
+                miniDict = {}    # "sub" is "pred" of "obj"
+                miniDict['meta'] = ""
+                miniDict['sub'] = obj
+                miniDict['obj'] = sub
+                miniDict['pred'] = relationship
+                resultJson['edges'].append(miniDict)
+
+        setOfObj = set(edges0)
+        setOfSub = set(edges1)
+        setOfAllNodes = setOfObj | setOfSub
+        for identifier in setOfAllNodes:
+            try:
+                name = id_name_dict_expanded[identifier]
+            except:
+                name = ""
+            miniDict = {'id': identifier, 'lbl': name}
+            resultJson['nodes'].append(miniDict)
+
+        resultJson = dict(resultJson)
+        resultJson = json.dumps(resultJson)
+        resultJson = json.loads(resultJson)
+        
+        resultTree = creatTree(commonParent, relationship, direction, 9, json=resultJson)
+        
+        return resultTree
+    
         
 
     def __repr__(self):
@@ -1653,60 +1966,7 @@ def f(*args, **kwargs):
 def int_cast(dict):
     return {k:int(v) for k,v in dict.items()}
 def str_cast(dict):
-    return {k:str(v) for k,v in dict.items()}
-
-def enrichment(id_name_dict):
-    """
-    Takes in terms and outputs a tree with the common parent as the root
-    Input: id_name_dict (dictionary, but anything that will iterate with the desired terms works)
-    Output: tree, extra (the same type of stuff that comes from creatTree)
-    """
-    Query = namedtuple('Query', ['root','relationshipType','direction','depth'])
-
-    try:
-        id_name_dict.pop(TOTAL_TERM_ID)
-    except KeyError:
-        pass
-    
-    # Make trees for each term. Make a masterSet from the terms
-    listOfSetOfNodes = []
-    for term in id_name_dict:
-        if term == id_name_dict[term]:
-            identifier = TERM_SERVER.term_id_expansion(term)[1]
-        else:
-            identifier = term
-        queryForTerm = Query(identifier, 'subClassOf', 'OUTGOING', 9)
-        try:
-            tree, extra = creatTree(*queryForTerm)
-            nodes = extra[2]
-            setOfNodes = set(nodes)
-            listOfSetOfNodes.append(setOfNodes)
-        except:
-            pass
-
-    # Make masterSet, which has all the nodes the terms share in common in their trees
-    masterSet = listOfSetOfNodes[0]
-    for setOfNodes in listOfSetOfNodes:
-        masterSet = masterSet & setOfNodes
-
-    masterSet.remove('CYCLE DETECTED DERPS')
-
-    while len(masterSet) != 0:
-        randomNode = masterSet.pop()
-        print(randomNode)
-        qry = Query(randomNode, 'subClassOf', 'OUTGOING', 9)
-        tree, extra = creatTree(*qry)
-        objects = extra[4]
-        children = []
-        for key in objects:
-            children = children + objects[key]
-        commonParent = randomNode
-        masterSet = masterSet & set(children)
-                    
-    tree, extra = creatTree(*Query(commonParent, 'subClassOf', 'INCOMING', 9))
-    return tree, extra
-
-
+    return {k:str(v) for k,v in dict.items()}   
 
 ###
 #   main
