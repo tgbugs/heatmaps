@@ -24,8 +24,6 @@ if environ.get('HEATMAP_PROD',None):  # set in heatmaps.wsgi if not globally
 else:
     from IPython import embed
 
-<<<<<<< HEAD
-
 from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
 from pyontutils.scigraph_client import Graph, Vocabulary
 from pyontutils.hierarchies import creatTree, in_tree
