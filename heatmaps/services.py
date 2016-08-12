@@ -1596,8 +1596,11 @@ class heatmap_service(database_service):
             if curie:
                 curie = curie.replace('#', '%23')
                 result = graph.getNeighbors(curie, depth=1, direction='BOTH')
-                edges = result['edges']
-                term_edge_syn_list.append((term, len(edges), len(syns)))
+                if result:
+                    edges = result['edges']
+                    term_edge_syn_list.append((term, len(edges), len(syns)))
+                else: 
+                    term_edge_syn_list.append((term, 0, len(syns)))
             else:
                 term_edge_syn_list.append((term, 0, len(syns)))
 
@@ -1897,8 +1900,8 @@ class heatmap_service(database_service):
             for sub in newEdgeDict[obj]:
                 miniDict = {}    # "sub" is "pred" of "obj"
                 miniDict['meta'] = ""
-                miniDict['sub'] = obj
-                miniDict['obj'] = sub
+                miniDict['sub'] = sub
+                miniDict['obj'] = obj
                 miniDict['pred'] = relationship
                 resultJson['edges'].append(miniDict)
         setOfObj = set(edges0)
@@ -1915,7 +1918,8 @@ class heatmap_service(database_service):
         resultJson = json.dumps(resultJson)
         resultJson = json.loads(resultJson)
         
-        resultTree = creatTree(commonParent, relationship, direction, 9, json=resultJson)
+        invdir = {'INCOMING':'OUTGOING','OUTGOING':'INCOMING'}[direction]
+        resultTree = creatTree(commonParent, relationship, invdir, 9, json=resultJson)
         
         return resultTree
     
