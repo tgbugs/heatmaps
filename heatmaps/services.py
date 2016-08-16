@@ -827,7 +827,7 @@ class heatmap_service(database_service):
 
     collTerms = None, 'collapse terms by character number' , 'collapse terms by hierarchy'
     collSources = None, 'collapse views to sources', 'collapse names to sources'
-    levels = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+    levels = [_ for _ in range(15)]
 
     termSortMethods = ('sort_alpha_id', 'sort_alpha_term', 'sort_frequency', 'sort_total_count', 'sort_name_length', 'sort_number_synonyms', 'sort_number_edges')
     srcSortMethods = ('sort_alpha_id', 'sort_alpha_term', 'sort_frequency', 'sort_total_count', 'sort_name_length')
@@ -1207,20 +1207,25 @@ class heatmap_service(database_service):
         tab = '\t'
         header = '\t'.join(('source', 'term', 'count', 'link'))
         lines = header
+        totals = heatmap_data['federation_totals']
         for term_name, term_id in zip(term_names, term_id_order):
             inner = heatmap_data[term_id.strip('"')]
             for src_name, src_id in zip(src_names, src_id_order):
                 if src_id in inner:
-                    count = str(inner[src_id])
+                    total = totals[src_id] if totals[src_id] else 1
+                    real_count = str(inner[src_id])
+                    real_count = '0' * (max_count_len - len(real_count)) + real_count
+                    #count = '{:3.4f}'.format((inner[src_id] / total) * len(totals))  # normalize by datasource size
+                    count = real_count
                     count = '0' * (max_count_len - len(count)) + count
                 else:
-                    count = single_pad + '-'  # null works nicely here
+                    real_count = count = single_pad + '-'  # null works nicely here
                 if src_id == 'nlx_82958':
-                    if count == '0':
+                    if count == '0' * max_count_len:
                         count = single_pad + '-'  # literature is missed in check above
-                    link = '<a href="http://neuinfo.org/literature/search?q='+term_id+'">'+count+'</a>'
+                    link = '<a href="http://neuinfo.org/literature/search?q='+term_id+'">'+real_count+'</a>'
                 else:
-                    link = '<a href="http://neuinfo.org/data/source/'+src_id+'/search?q='+term_id+'">'+count+'</a>'
+                    link = '<a href="http://neuinfo.org/data/source/'+src_id+'/search?q='+term_id+'">'+real_count+'</a>'
                 proto_line = '\t'.join((src_name, term_name, count, link))
                 lines += '\n' + proto_line
 
@@ -1314,6 +1319,8 @@ class heatmap_service(database_service):
 
         tuples = [[v if v is not None else '' for v in self.term_server.term_id_expansion(term)]  # FIXME this called 2x
                   for term in heatmap_data]
+        cuires = [t[1] for t in tuples if t[1]]
+        relationship_types = tuple(set())  # TODO
         for tup in tuples:
             tup[-1] = str(tup[-1])  # convert syns -> query
 
@@ -1364,6 +1371,7 @@ class heatmap_service(database_service):
         select_mapping = {  # store this until... when?
                         'collTerms':(self.collTerms, ),
                         'collSources':(self.collSources, ),
+                        'edges':(relationship_types, ),
                         'levels':(self.levels, ),
                         'sortTypeTerms':(self.sort_types, ),
                         'sortTypeSrcs':(self.sort_types, ),
