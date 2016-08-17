@@ -27,7 +27,7 @@ else:
 from .visualization import applyCollapse, dict_to_matrix,sCollapseToSrcId, sCollapseToSrcName, make_png, sCollToLength, sCollByTermParent
 from pyontutils.scigraph_client import Graph, Vocabulary
 from pyontutils.hierarchies import creatTree, in_tree
-from .scigraph_client import Graph, Vocabulary
+from pyontutils.scigraph_client import Graph, Vocabulary
 
 # initilaize scigraph services
 graph = Graph()
