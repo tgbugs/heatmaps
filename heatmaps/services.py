@@ -30,8 +30,8 @@ from pyontutils.hierarchies import creatTree, in_tree
 from pyontutils.scigraph_client import Graph, Vocabulary
 
 # initilaize scigraph services
-graph = Graph()
-vocab = Vocabulary()
+graph = Graph(cache=True)
+vocab = Vocabulary(cache=True)
 
 """
 INSERT INTO view_history (id, source_id_order, term_counts) VALUES (
@@ -1666,7 +1666,7 @@ class heatmap_service(database_service):
                 identifier = term
             queryForTerm = Query(identifier, relationship, direction, 9)
             try:
-                tree, extra = creatTree(*queryForTerm)
+                tree, extra = creatTree(*queryForTerm, graph=graph)
                 nodes = extra[2]
                 setOfNodes = set(nodes)
                 listOfSetOfNodes.append(setOfNodes)
@@ -1927,7 +1927,7 @@ class heatmap_service(database_service):
         resultJson = json.loads(resultJson)
         
         invdir = {'INCOMING':'OUTGOING','OUTGOING':'INCOMING'}[direction]
-        resultTree = creatTree(commonParent, relationship, invdir, 9, json=resultJson)
+        resultTree = creatTree(commonParent, relationship, invdir, 9, graph=graph, json=resultJson)
         
         return resultTree
     
